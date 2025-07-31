@@ -11,7 +11,6 @@ add_library(
 target_include_directories(
     JudgeLayer
     PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/cpp-httplib
     ${CMAKE_CURRENT_SOURCE_DIR}/../core/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )

@@ -9,48 +9,6 @@ namespace Judge
 {
     using njson = nlohmann::json;
 
-    enum class TaskStatus
-    {
-        IN_QUEUE,
-        PROCESSING,
-        ACCEPTED,
-        WRONG_ANSWER,
-        TIME_LIMIT_EXCEEDED,
-        COMPILATION_ERROR,
-        SIGSEGV_ERROR,
-        SIGXFSZ_ERROR,
-        SIGFPE_ERROR,
-        SIGABRT_ERROR,
-        NZEC_ERROR,
-        OTHER_RUNTIME_ERROR,
-        INTERNAL_ERROR,
-        EXEC_FORMAT_ERROR,
-        UNKNOWN_ERROR,
-    };
-
-    inline constexpr const char* TaskStatusToString(TaskStatus status)
-    {
-        switch (status)
-        {
-        case TaskStatus::IN_QUEUE: return "In Queue";
-        case TaskStatus::PROCESSING: return "Processing";
-        case TaskStatus::ACCEPTED: return "Accepted";
-        case TaskStatus::WRONG_ANSWER: return "Wrong Answer";
-        case TaskStatus::TIME_LIMIT_EXCEEDED: return "Time Limit Exceeded";
-        case TaskStatus::COMPILATION_ERROR: return "Compilation Error";
-        case TaskStatus::SIGSEGV_ERROR: return "Runtime Error (SIGSEGV)";
-        case TaskStatus::SIGXFSZ_ERROR: return "Runtime Error (SIGXFSZ)";
-        case TaskStatus::SIGFPE_ERROR: return "Runtime Error (SIGFPE)";
-        case TaskStatus::SIGABRT_ERROR: return "Runtime Error (SIGABRT)";
-        case TaskStatus::NZEC_ERROR: return "Runtime Error (NZEC)";
-        case TaskStatus::OTHER_RUNTIME_ERROR: return "Runtime Error (Other)";
-        case TaskStatus::INTERNAL_ERROR: return "Internal Error";
-        case TaskStatus::EXEC_FORMAT_ERROR: return "Exec Format Error";
-        case TaskStatus::UNKNOWN_ERROR: return "Unknown Error";
-        default: return "Unknown";
-        }
-    }
-
     class Judger
     {
     public:
