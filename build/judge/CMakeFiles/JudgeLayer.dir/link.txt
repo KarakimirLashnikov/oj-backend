@@ -1,0 +1,2 @@
+/usr/bin/ar qc libJudgeLayer.a CMakeFiles/JudgeLayer.dir/src/Judger.cpp.o
+/usr/bin/ranlib libJudgeLayer.a

@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/home/mcx/桌面/MyCode/C++/suoj/oj-backend/build",
+  "command": "/usr/bin/c++  -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/judge -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/core -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/third_party/spdlog/include -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/third_party/cpp-httplib -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/third_party/json/include -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/core/include -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/judge/include -g -std=gnu++23 -o CMakeFiles/oj-backend.dir/main.cpp.o -c /home/mcx/桌面/MyCode/C++/suoj/oj-backend/main.cpp",
+  "file": "/home/mcx/桌面/MyCode/C++/suoj/oj-backend/main.cpp",
+  "output": "CMakeFiles/oj-backend.dir/main.cpp.o"
+},
+{
+  "directory": "/home/mcx/桌面/MyCode/C++/suoj/oj-backend/build/core",
+  "command": "/usr/bin/c++  -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/judge -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/core -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/third_party/spdlog/include -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/third_party/cpp-httplib -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/third_party/json/include -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/core/include -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/core/src -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/core/../third_party/spdlog/include -g -std=gnu++23 -o CMakeFiles/CoreLayer.dir/src/Logger.cpp.o -c /home/mcx/桌面/MyCode/C++/suoj/oj-backend/core/src/Logger.cpp",
+  "file": "/home/mcx/桌面/MyCode/C++/suoj/oj-backend/core/src/Logger.cpp",
+  "output": "core/CMakeFiles/CoreLayer.dir/src/Logger.cpp.o"
+},
+{
+  "directory": "/home/mcx/桌面/MyCode/C++/suoj/oj-backend/build/judge",
+  "command": "/usr/bin/c++  -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/judge -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/core -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/third_party/spdlog/include -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/third_party/cpp-httplib -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/third_party/json/include -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/judge/../third_party/cpp-httplib -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/judge/../core/include -I/home/mcx/桌面/MyCode/C++/suoj/oj-backend/judge/include -g -std=gnu++23 -o CMakeFiles/JudgeLayer.dir/src/Judger.cpp.o -c /home/mcx/桌面/MyCode/C++/suoj/oj-backend/judge/src/Judger.cpp",
+  "file": "/home/mcx/桌面/MyCode/C++/suoj/oj-backend/judge/src/Judger.cpp",
+  "output": "judge/CMakeFiles/JudgeLayer.dir/src/Judger.cpp.o"
+}
+]
