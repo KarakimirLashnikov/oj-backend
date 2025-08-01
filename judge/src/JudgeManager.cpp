@@ -70,7 +70,7 @@ namespace Judge
             std::lock_guard<std::mutex> lock{ this->m_ResultWriteMutex };
             auto& result{ this->m_SubmissionId2Result.at(id) };
             if(result.insertTaskResult(std::move(task_result))) {
-                std::async(std::launch::async, this->m_Callback, std::move(result));
+                auto f { std::async(std::launch::async, this->m_Callback, std::move(result)) };
                 this->m_SubmissionId2Result.erase(id);
             }
         }

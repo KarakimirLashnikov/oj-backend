@@ -76,7 +76,7 @@ namespace Judge
         for (size_t i{ 0 }; i < this->m_TaskResults.size(); ++i)
         {
             submission_result.append('[' +
-                this->m_TaskResults.at(i).toString()) + "]\n";
+                this->m_TaskResults.at(i).toString() + "]\n");
         }
         return submission_result;
     }
