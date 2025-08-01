@@ -98,9 +98,14 @@ namespace Judge
 
         // return true if completed( task_results.size() == test_count )
         bool insertTaskResult(TaskResult&& task_result);
+
+        inline std::uint64_t getSubmissionId() const {
+            return m_SubmissionId;
+        }
+
+        std::string toString() const;
     private:
         void setStatus();
-
         std::uint64_t m_SubmissionId{0};
         std::vector<TaskResult> m_TaskResults;
         int m_TaskCount{-1};

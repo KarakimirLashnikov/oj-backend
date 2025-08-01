@@ -66,4 +66,18 @@ namespace Judge
             this->m_Status = SubmissionStatus::RE;
         }
     }
+
+    std::string SubmissionResult::toString() const
+    {
+        std::string submission_result{ "ID: " + std::to_string(this->m_SubmissionId) + "\n" };
+        submission_result.append("Created at: " + std::format("{:%Y-%m-%d %H:%M:%S} \n", this->m_CreateAt));
+        submission_result.append("Finished at: " + std::format("{:%Y-%m-%d %H:%M:%S} \n", this->m_FinishAt));
+        submission_result.append("Status: " + std::string(SubmissionStatusToString(static_cast<SubmissionStatus>(this->m_Status))) + "\n");
+        for (size_t i{ 0 }; i < this->m_TaskResults.size(); ++i)
+        {
+            submission_result.append('[' +
+                this->m_TaskResults.at(i).toString()) + "]\n";
+        }
+        return submission_result;
+    }
 }

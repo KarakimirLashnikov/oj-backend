@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/judge
     ${CMAKE_CURRENT_SOURCE_DIR}/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/app
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/cpp-httplib
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/json/include
@@ -16,6 +17,7 @@ include_directories(
 add_subdirectory(core)
 add_subdirectory(judge)
 add_subdirectory(third_party)
+add_subdirectory(app)
 
 
 # 在Windows上需要显式链接filesystem库
@@ -40,6 +42,7 @@ target_include_directories(
     PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/core/include
     ${CMAKE_CURRENT_SOURCE_DIR}/judge/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/include
 )
 
 target_link_libraries(
@@ -48,6 +51,7 @@ target_link_libraries(
     ThirdParty
     CoreLayer 
     JudgeLayer
+    AppLayer
 )
 
 # 定义配置文件源路径和目标路径

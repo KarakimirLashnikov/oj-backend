@@ -7,11 +7,11 @@ namespace Judge
     : submission_id{ id }, source_code{ code.begin(), code.end() }, language_id{ lang_id }
     {
         Core::Configurator config{ "config.ini" };
-        this->cpu_time_limit = config.get<float>("submission-defaults-values", "cpu_time_limit", -1.0f);
-        this->cpu_extra_time = config.get<float>("submission-defaults-values", "cpu_extra_time", -1.0f);
-        this->wall_time_limit = config.get<int>("submission-defaults-values", "wall_time_limit", -1.0f);
-        this->memory_limit = config.get<int>("submission-defaults-values", "memory_limit", -1);
-        this->stack_limit = config.get<int>("submission-defaults-values", "stack_limit", -1);
+        this->cpu_time_limit = config.get<float>("submission", "cpu_time_limit", -1.0f);
+        this->cpu_extra_time = config.get<float>("submission", "cpu_extra_time", -1.0f);
+        this->wall_time_limit = config.get<int>("submission", "wall_time_limit", -1.0f);
+        this->memory_limit = config.get<int>("submission", "memory_limit", -1);
+        this->stack_limit = config.get<int>("submission", "stack_limit", -1);
     }
 
     SubmissionSchema::SubmissionSchema(std::uint64_t id, const SubmissionSchema &other) noexcept
