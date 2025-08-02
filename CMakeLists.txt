@@ -19,13 +19,14 @@ add_subdirectory(judge)
 add_subdirectory(third_party)
 add_subdirectory(app)
 
-
 # 在Windows上需要显式链接filesystem库
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lstdc++fs")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
 endif()
+
+
 
 add_executable(
     oj-backend

@@ -1,99 +1,104 @@
 #include "Judger.hpp"
+#include "Configurator.hpp"
+#include "compilers/CppCompiler.hpp"
+#include "actuators/CppActuator.hpp"
 
 namespace Judge
 {
-    Judger::Judger(std::string_view base_url, std::string_view auth_token, int max_retries, int timeout, double backoff_factor)
-        : m_ImplPtr{std::make_unique<Impl>(base_url, auth_token, max_retries, timeout, backoff_factor)}
+    JudgeResult Judger::judge(Submission &&submission)
     {
-        if (!m_ImplPtr->cli.is_valid())
+        JudgeResult result{submission.problem, submission.submission_id, submission.test_cases.size()};
+        result.setCreateTime(TimeStamp::clock::now());
+
+        ResourceLimits limits{
+            .cpu_time_limit_s = submission.cpu_time_limit_s,
+            .cpu_extra_time_s = submission.cpu_extra_time_s,
+            .wall_time_limit_s = submission.wall_time_limit_s,
+            .memory_limit_kb = submission.memory_limit_kb,
+            .stack_limit_kb = submission.stack_limit_kb
+        };
+
+        try {
+            auto compiler{ this->getCompiler(submission.language_id ) };
+            auto actuator{ this->getActuator(submission.language_id) };
+            if (!compiler || !actuator) {
+                throw std::runtime_error{ "Can't find a valid compiler/actuator for this language." };
+            }
+            std::string exe_dir{ "SubmissionExeDir/" + std::to_string(submission.submission_id) };
+            if (fs::create_directories(exe_dir)) {
+                if (compiler->compile(submission.source_code, exe_dir + "/main", submission.compile_options)) {
+                    result.setCompileMessage( compiler->getCompileMessage() );
+                    std::vector<std::future<TestResult>> fut_list;
+                    for (size_t i{0}; i < submission.test_cases.size(); ++i) {
+                        TestResult test_result{};
+                        test_result.index = i;
+                        const auto& [input_data, expected_output] = submission.test_cases[i];
+                        fut_list.emplace_back(std::async(std::launch::async, [&](){
+                            test_result.setResult(actuator->execute(exe_dir + "/main", limits, input_data));
+                            return test_result;
+                        } ));
+                    }
+                    for (size_t i{0}; i < fut_list.size(); ++i) {
+                        const auto& [input_data, expected_output] = submission.test_cases[i];
+                        result.insertTestResult( this->judgeTest(expected_output, fut_list[i].get()) );
+                    }
+                    // 删除可执行文件
+                    fs::remove_all(exe_dir);
+                } else {
+                    result.setCompileMessage("Compile Error: " + compiler->getCompileMessage());
+                    for (size_t i{0}; i < submission.test_cases.size(); ++i) {
+                        TestResult test_result{};
+                        test_result.index = i;
+                        test_result.status = TestStatus::COMPILATION_ERROR;
+                        result.insertTestResult(std::move(test_result));
+                    }
+                    return result;
+                }
+            } else {
+                throw std::runtime_error{ "Failed to create exe directory: " + exe_dir };
+            }
+        }
+        catch (std::exception& e) {
+            LOG_ERROR("An error occur in judger: {}", e.what());
+            for (size_t i{0}; i < submission.test_cases.size(); ++i) {
+                TestResult test_result{};
+                test_result.index = i;
+                test_result.status = TestStatus::INTERNAL_ERROR;
+                result.insertTestResult(std::move(test_result));
+            }
+            return result;
+        }
+        return result;
+    }
+
+    std::unique_ptr<Compiler> Judger::getCompiler(LangID lang_id)
+    {
+        switch (lang_id)
         {
-            LOG_ERROR("httplib initialization failed, please check the URL.");
-            throw std::runtime_error{"httplib initialization failed"};
+        case LangID::CPP: return createCompiler<CppCompiler>();
+        default: return nullptr;
         }
     }
 
-    std::string Judger::submit(const httplib::Params &payload, bool is_base64)
+    std::unique_ptr<Actuator> Judger::getActuator(LangID lang_id)
     {
-        auto sender{[this, payload, is_base64]() -> httplib::Result
-                    {
-                        std::string path{this->m_ImplPtr->judge_url + "/submissions/?"};
-                        path += is_base64 ? "base64_endcoded=true" : "base64_endcoded=false";
-                        return this->m_ImplPtr->cli.Post(path, payload);
-                    }};
-
-        auto result{this->requestWithRetry(sender)};
-        if (!result)
-            throw std::runtime_error{httplib::to_string(result.error())};
-
-        auto response{this->requestWithRetry(sender).value()};
-        return this->handleResponse(response).at("token").get<std::string>();
+        switch (lang_id)
+        {
+        case LangID::CPP: return createActuator<CppActuator>();
+        default: return nullptr;
+        }
     }
 
-    njson Judger::getJudgeResult(std::string_view token)
+    TestResult Judger::judgeTest(const ExpectedOutput &expected_output, TestResult &&result)
     {
-        auto fetcher{[token, this]() -> httplib::Result
-                     {
-                         std::string path = "/submissions/" + std::string(token) + "/fields=*";
-                         return this->m_ImplPtr->cli.Get(path);
-                     }};
-
-        auto result{this->requestWithRetry(fetcher)};
-        if (!result)
-            throw std::runtime_error{httplib::to_string(result.error())};
-
-        auto response{this->requestWithRetry(fetcher).value()};
-        return this->handleResponse(response);
-    }
-
-    njson Judger::handleResponse(const httplib::Response &resp)
-    {
-        if (resp.status < 200 || resp.status >= 300)
-        {
-            std::string err = "HTTP error: " + std::to_string(resp.status) + " " + resp.reason;
-            if (resp.status == 429)
-                err = " Submit too fast! Please try later.(Rate limit exceeded)";
-            throw std::runtime_error{err};
+        if (result.status == TestStatus::UNKNOWN) {
+            if (result.stdout == expected_output) {
+                result.status = TestStatus::ACCEPTED;
+            }
+            else {
+                result.status = TestStatus::WRONG_ANSWER;
+            }
         }
-        try
-        {
-            return njson::parse(resp.body);
-        }
-        catch (njson::parse_error &ex)
-        {
-            std::stringstream ss;
-            ss << "Error when parsing the response: " << resp.body << " --- " << ex.what();
-            throw std::runtime_error(ss.str());
-        }
-        catch (njson::type_error &ex)
-        {
-            std::stringstream ss;
-            ss << "Error when extracting the submission ID: " << resp.body << " --- " << ex.what();
-            throw std::runtime_error(ss.str());
-        }
-        catch (std::exception &ex)
-        {
-            throw ex;
-        }
-
-        return njson::parse(resp.body);
-    }
-
-    Judger::Impl::Impl(std::string_view p_url,
-                       std::string_view p_auth_token,
-                       int p_max_etries,
-                       int p_timeout,
-                       double p_backoff_factor)
-        : judge_url{std::string(p_url.back() == '/' ? p_url.substr(0, p_url.size() - 1) : p_url)},
-          auth_token{std::string(p_auth_token)},
-          timeout{p_timeout},
-          max_retries{p_max_etries},
-          backoff_factor{p_backoff_factor},
-          cli{judge_url}
-    {
-        cli.set_read_timeout(timeout);
-        cli.set_connection_timeout(timeout);
-        cli.set_default_headers({{"Content-Type", "application/json"}});
-        if (!auth_token.empty())
-            cli.set_default_headers({{"X-Auth-Token", auth_token}});
+        return result;
     }
 }

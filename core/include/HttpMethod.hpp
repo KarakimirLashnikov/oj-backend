@@ -1,4 +1,5 @@
 #pragma once
+
 #include "Core.hpp"
 
 namespace Core::Http
@@ -13,14 +14,14 @@ namespace Core::Http
     struct TRACE{};
     struct CONNECT{};
 
-    template <typename T>
-    concept HttpMethod = std::is_same<T, GET>::value
-        || std::is_same<T, POST>::value
-        || std::is_same<T, PUT>::value
-        || std::is_same<T, DELETE>::value
-        || std::is_same<T, PATCH>::value
-        || std::is_same<T, HEAD>::value
-        || std::is_same<T, OPTIONS>::value
-        || std::is_same<T, TRACE>::value
-        || std::is_same<T, CONNECT>::value;
+    template <typename TMethod>
+    concept HttpMethod = std::is_same_v<TMethod, GET> ||
+                         std::is_same_v<TMethod, POST> ||
+                         std::is_same_v<TMethod, PUT> ||
+                         std::is_same_v<TMethod, DELETE> ||
+                         std::is_same_v<TMethod, PATCH> ||
+                         std::is_same_v<TMethod, HEAD> ||
+                         std::is_same_v<TMethod, OPTIONS> ||
+                         std::is_same_v<TMethod, TRACE> ||
+                         std::is_same_v<TMethod, CONNECT>;
 }

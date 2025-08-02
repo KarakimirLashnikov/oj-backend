@@ -1,33 +1,50 @@
-#include "Logger.hpp"
-#include "Configurator.hpp"
-#include "JudgeManager.hpp"
 #include "Application.hpp"
 
 namespace OJApp
 {
-    std::unique_ptr<Application> Application::s_App{ };
+    std::unique_ptr<Application> Application::s_AppPtr{ nullptr };
 
     Application &Application::getInstance()
     {
-        if (!s_App)
-            s_App.reset(new Application);
-        return *(Application::s_App);
+        if (!Application::s_AppPtr)
+            Application::s_AppPtr.reset(new Application);
+        return *s_AppPtr;
     }
 
-    void Application::init(std::string_view host, int port, std::string_view log_file, std::string_view config_file)
+    void Application::init(std::string_view host, int port)
     {
-        this->host = std::string(host);
-        this->port = port;
-        Core::Logger::Init("server", Core::Logger::Level::INFO, log_file.data());
-        this->configurator = std::make_shared<Core::Configurator>(config_file);
-        this->judge_manager = std::make_unique<Judge::JudgeManager>(
-            this->configurator->get<std::string>("judge", "judge0_url", "http://localhost:2358"),
-            this->configurator->get<std::string>("judge", "judge0_auth_token")
-        );
+        this->m_Host = host;
+        this->m_Port = port;
+        this->m_HttpServer = std::make_unique<httplib::Server>();
+        this->m_JudgeManager = std::make_unique<Judge::JudgeManager>(
+            std::bind(&Application::judgeCallback, this, std::placeholders::_1));
+        this->m_IsRunning = false;
     }
 
     void Application::run()
     {
-        this->server->listen(this->host, this->port);
+        this->m_IsRunning = true;
+        this->m_HttpServerThread = std::make_unique<std::thread>([this]() {
+                LOG_INFO("HTTP Server Start");
+                this->m_HttpServer->listen(this->m_Host.data(), this->m_Port);
+                LOG_INFO("HTTP Server Ready");
+            }
+        );
+        while (this->m_IsRunning) {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            LOG_WARN("main thread is idling ...");
+        }
+    }
+
+    void Application::stop() 
+    {
+        this->m_IsRunning = false;
+        this->m_HttpServer->stop();
+        this->m_HttpServerThread->join();
+    }
+
+    void Application::judgeCallback(Judge::JudgeResult &&result)
+    {
+        LOG_INFO("{}", result.toString());
     }
 }

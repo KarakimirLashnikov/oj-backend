@@ -1,5 +1,14 @@
 #pragma once
 
+#include <boost/process.hpp>
+#include <boost/asio.hpp>
+#include <boost/process/search_path.hpp>
+#include <boost/process/io.hpp>
+#include <boost/process/pipe.hpp>
+#include <boost/process/extend.hpp>
+
+
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -25,3 +34,8 @@
 #include <functional>
 #include <ranges>
 #include <numeric>
+#include <tuple>
+#include <format>
+#include <atomic>
+
+#define BITMASK(x) (1ULL << (x))
