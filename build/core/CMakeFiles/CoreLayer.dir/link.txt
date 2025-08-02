@@ -1,2 +1,0 @@
-/usr/bin/ar qc libCoreLayer.a CMakeFiles/CoreLayer.dir/src/Logger.cpp.o
-/usr/bin/ranlib libCoreLayer.a
