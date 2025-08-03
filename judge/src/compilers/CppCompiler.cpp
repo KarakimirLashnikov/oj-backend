@@ -5,7 +5,7 @@ namespace Judge
 {
     bool CppCompiler::compile(std::string_view source_path,
                               std::string_view output_path,
-                              const std::initializer_list<const char *>& additional_flags)
+                              const std::vector<std::string>& additional_flags)
     {
         // 清空之前的输出
         this->m_CompileMessage.clear();
@@ -30,7 +30,7 @@ namespace Judge
                                      "-o", std::string(output_path),
                                      std::string(source_path)});
             // 处理额外标志（安全分割）
-            for (const char* flag : additional_flags) {
+            for (const std::string& flag : additional_flags) {
                 args.push_back(flag);
             }
 

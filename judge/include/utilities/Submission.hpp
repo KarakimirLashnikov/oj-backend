@@ -11,8 +11,8 @@ namespace Judge
     struct Submission
     {
         std::string problem;
-        std::string source_code;
-        std::initializer_list<const char*> compile_options;
+        std::string source_code_path;
+        std::vector<std::string> compile_options;
         TestCases test_cases;
         SubID submission_id;
         float cpu_time_limit_s;

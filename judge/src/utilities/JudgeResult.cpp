@@ -93,7 +93,7 @@ namespace Judge
     std::string JudgeResult::toString() const
     {
         std::string str{ std::format("Problem: {}\n", this->m_Problem)};
-        str.append("SubmissionId: " + std::to_string(this->m_SubId) + "\n");
+        str.append("SubmissionId: " + boost::uuids::to_string(this->m_SubId) + "\n");
         str.append("Status: " + Judge::toString(this->m_Status) + "\n");
         str.append("Duration: " + std::to_string(std::chrono::duration_cast<Millis>(this->m_FinishAt - this->m_CreateAt).count()) + " ms\n");
         str.append("Compile Message: " + this->m_CompileMsg + "\n");

@@ -32,5 +32,7 @@ namespace Judge
                           ExecutionResult &result,
                           const ResourceLimits &limits,
                           const fs::path& cgroup_path);
+
+        void cleanupCgroups(const fs::path& path) override;
     };
 }

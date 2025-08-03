@@ -5,8 +5,9 @@
 
 namespace Judge
 {
-    JudgeResult Judger::judge(Submission &&submission)
+    JudgeResult Judger::judge(Submission submission)
     {
+        LOG_INFO("Judger Judging: {}", __FILE__);
         JudgeResult result{submission.problem, submission.submission_id, submission.test_cases.size()};
         result.setCreateTime(TimeStamp::clock::now());
 
@@ -19,55 +20,62 @@ namespace Judge
         };
 
         try {
+            // 获取源码所在目录作为工作目录
+            auto work_dir = std::filesystem::path(submission.source_code_path).parent_path();
+            if (work_dir.empty()) {
+                LOG_ERROR("Can't find source file {} directory", submission.source_code_path.data());
+                throw std::system_error(errno, std::system_category(), "Get directory failed");
+            }
+            auto exe_path = work_dir / "main";  // 可执行文件路径
+            
             auto compiler{ this->getCompiler(submission.language_id ) };
             auto actuator{ this->getActuator(submission.language_id) };
+            
             if (!compiler || !actuator) {
                 throw std::runtime_error{ "Can't find a valid compiler/actuator for this language." };
             }
-            std::string exe_dir{ "SubmissionExeDir/" + std::to_string(submission.submission_id) };
-            if (fs::create_directories(exe_dir)) {
-                if (compiler->compile(submission.source_code, exe_dir + "/main", submission.compile_options)) {
-                    result.setCompileMessage( compiler->getCompileMessage() );
-                    std::vector<std::future<TestResult>> fut_list;
-                    for (size_t i{0}; i < submission.test_cases.size(); ++i) {
+            
+            if (compiler->compile(submission.source_code_path, exe_path.string(), submission.compile_options)) {
+                result.setCompileMessage( compiler->getCompileMessage() );
+                std::vector<std::future<TestResult>> fut_list;
+                
+                // 异步执行所有测试用例
+                for (size_t i{0}; i < submission.test_cases.size(); ++i) {
+                    const auto& [input_data, expected_output] = submission.test_cases[i];
+                    fut_list.emplace_back(std::async(std::launch::async, [&, i, input_data = input_data](){
                         TestResult test_result{};
                         test_result.index = i;
-                        const auto& [input_data, expected_output] = submission.test_cases[i];
-                        fut_list.emplace_back(std::async(std::launch::async, [&](){
-                            test_result.setResult(actuator->execute(exe_dir + "/main", limits, input_data));
-                            return test_result;
-                        } ));
-                    }
-                    for (size_t i{0}; i < fut_list.size(); ++i) {
-                        const auto& [input_data, expected_output] = submission.test_cases[i];
-                        result.insertTestResult( this->judgeTest(expected_output, fut_list[i].get()) );
-                    }
-                    // 删除可执行文件
-                    fs::remove_all(exe_dir);
-                } else {
-                    result.setCompileMessage("Compile Error: " + compiler->getCompileMessage());
-                    for (size_t i{0}; i < submission.test_cases.size(); ++i) {
-                        TestResult test_result{};
-                        test_result.index = i;
-                        test_result.status = TestStatus::COMPILATION_ERROR;
-                        result.insertTestResult(std::move(test_result));
-                    }
-                    return result;
+                        test_result.setResult(actuator->execute(exe_path.string(), limits, input_data));
+                        return test_result;
+                    }));
+                }
+                
+                // 收集所有测试结果
+                for (size_t i{0}; i < fut_list.size(); ++i) {
+                    const auto& [input_data, expected_output] = submission.test_cases[i];
+                    result.insertTestResult(this->judgeTest(expected_output, fut_list[i].get()));
                 }
             } else {
-                throw std::runtime_error{ "Failed to create exe directory: " + exe_dir };
+                result.setCompileMessage("Compile Error: " + compiler->getCompileMessage());
+                for (size_t i{0}; i < submission.test_cases.size(); ++i) {
+                    TestResult test_result{};
+                    test_result.index = i;
+                    test_result.status = TestStatus::COMPILATION_ERROR;
+                    result.insertTestResult(std::move(test_result));
+                }
             }
-        }
-        catch (std::exception& e) {
-            LOG_ERROR("An error occur in judger: {}", e.what());
+        } catch (std::exception& e) {
+            LOG_ERROR("An error occurred in judger: {}", e.what());
             for (size_t i{0}; i < submission.test_cases.size(); ++i) {
                 TestResult test_result{};
                 test_result.index = i;
                 test_result.status = TestStatus::INTERNAL_ERROR;
                 result.insertTestResult(std::move(test_result));
             }
-            return result;
+            result.setCompileMessage("Error: " + std::string(e.what()));
+            throw e;
         }
+        LOG_INFO("Judger Judged: {}", result.toString());
         return result;
     }
 
@@ -89,7 +97,7 @@ namespace Judge
         }
     }
 
-    TestResult Judger::judgeTest(const ExpectedOutput &expected_output, TestResult &&result)
+    TestResult Judger::judgeTest(const ExpectedOutput &expected_output, TestResult result)
     {
         if (result.status == TestStatus::UNKNOWN) {
             if (result.stdout == expected_output) {

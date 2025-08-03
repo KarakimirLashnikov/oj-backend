@@ -5,9 +5,8 @@ add_library(
 file(
     GLOB
     app_sources
-    "include/*.hpp"
+    "src/api/*.cpp"
     "src/*.cpp"
-    "include/HttpMethodImpl.inl"
 )
 
 target_sources(
@@ -22,4 +21,5 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../core/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../judge/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/json/include
 )

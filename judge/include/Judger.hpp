@@ -24,11 +24,11 @@ namespace Judge
         Judger() = default;
         ~Judger() = default;
 
-        JudgeResult judge(Submission&& submission);
+        JudgeResult judge(Submission submission);
 
     private:
         std::unique_ptr<Compiler> getCompiler(LangID lang_id);
         std::unique_ptr<Actuator> getActuator(LangID lang_id);
-        TestResult judgeTest(const ExpectedOutput& expected_output, TestResult&& result);
+        TestResult judgeTest(const ExpectedOutput& expected_output, TestResult result);
     };
 }

@@ -5,7 +5,7 @@ namespace Core::Types
 {
     using TimeStamp = std::chrono::time_point<std::chrono::steady_clock>;
     using Millis = std::chrono::milliseconds;
-    using SubID = std::uint64_t;
+    using SubID = boost::uuids::random_generator_pure::result_type;
     using StatusCode = std::uint8_t;
     using TestInput = std::string;
     using ExpectedOutput = std::string;

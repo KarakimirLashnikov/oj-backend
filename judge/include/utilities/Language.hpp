@@ -9,4 +9,17 @@ namespace Judge::Language
         CPP,
         PYTHON
     };
+
+    inline std::string getFileExtension(LangID id)
+    {
+        switch (id)
+        {
+        case LangID::CPP:
+            return ".cpp";
+        case LangID::PYTHON:
+            return ".py";
+        case LangID::UNKNOWN:
+        default: return "";
+        }
+    }
 }

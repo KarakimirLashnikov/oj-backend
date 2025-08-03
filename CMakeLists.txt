@@ -19,17 +19,14 @@ add_subdirectory(judge)
 add_subdirectory(third_party)
 add_subdirectory(app)
 
-# 在Windows上需要显式链接filesystem库
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lstdc++fs")
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
-endif()
+add_executable(oj-backend)
 
-
-
-add_executable(
-    oj-backend
+target_precompile_headers(
+    oj-backend PRIVATE
+    "core/include/Core.hpp"
+    <spdlog/spdlog.h>
+    <nlohmann/json.hpp>
+    <httplib.h>
 )
 
 target_sources(
@@ -66,4 +63,24 @@ add_custom_command(
         "${CONFIG_FILE}"
         "${TARGET_DIR}/config.ini"
     COMMENT "Copying config.ini to executable directory"
+)
+
+# 配置运行脚本（使用pkexec/sudo运行）
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/run_oj-backend.sh.in
+    ${CMAKE_CURRENT_BINARY_DIR}/run_oj-backend.sh
+    @ONLY
+)
+
+# 设置脚本权限
+add_custom_command(
+    TARGET oj-backend POST_BUILD
+    COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/run_oj-backend.sh
+)
+
+# 添加运行目标
+add_custom_target(run
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/run_oj-backend.sh
+    DEPENDS oj-backend
+    COMMENT "Running oj-backend with elevated privileges..."
 )

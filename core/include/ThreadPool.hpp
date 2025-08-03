@@ -32,6 +32,7 @@ namespace Core
             condition.notify_one();
             return res;
         }
+        
         ~ThreadPool();
 
     private:
