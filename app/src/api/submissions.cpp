@@ -18,7 +18,7 @@ namespace OJApp::API
         Submission sub{};
         try {
             sub.problem = j.at("problem").get<std::string>();
-            sub.source_code_path = j.at("source_code").get<std::string>(); // 先写入源码 , 后被替换为文件路径
+            sub.uploade_code_file_path = j.at("source_code").get<std::string>(); // 先写入源码 , 后被替换为文件路径
             for (const auto& opt : j.at("compile_options")) {
                 sub.compile_options.push_back(opt.get<std::string>());
             }
@@ -26,13 +26,12 @@ namespace OJApp::API
             
             sub.submission_id =  boost::uuids::random_generator()();
             res.set_content(boost::uuids::to_string(sub.submission_id), "text/plain");
-            App.processSubmission(std::move(sub));
+            App.submit(std::move(sub));
         } catch (const std::exception& e) {
             res.status = 400;
             res.set_content("Missing submission fields", "text/plain");
             return;
         }
         res.status = 200;
-        
     }
 }

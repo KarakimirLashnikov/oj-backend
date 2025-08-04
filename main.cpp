@@ -8,15 +8,11 @@ int main()
 {
     try
     {
-        App.init("0.0.0.0", 8000);
+        App.init("config.ini");
 
         App.registryRouter<POST>("/api/submit", &dealSubmit);
-
-        App.startServer();
     
-        App.run();
-
-        App.stop();
+        App.run("0.0.0.0", 8000);
     }
     catch (std::exception &e)
     {

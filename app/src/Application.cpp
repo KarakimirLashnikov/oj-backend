@@ -1,12 +1,41 @@
 #include "Application.hpp"
+#include "Types.hpp"
+#include "Configurator.hpp"
+#include "ThreadPool.hpp"
+#include "FileWriter.hpp"
+#include "utilities/JudgeResult.hpp"
+#include "utilities/Language.hpp"
+#include "compilers/CppCompiler.hpp"
+#include "actuators/CppActuator.hpp"
 
 namespace OJApp
 {
     std::unique_ptr<Application> Application::s_AppPtr{ nullptr };
 
-    constexpr static int MaxCacheResultNum{ 128 };
-    constexpr static float CacheTimeout_s { 2.0f };
-    constexpr const char* SubmissionTempRootDir{ "SubmissionTempRootDir" };
+    struct Application::Impl
+    {
+        Core::Queue<Judge::JudgeResult> m_CompletedQueue;
+        std::unique_ptr<Core::ThreadPool> m_JudgerPool;
+        fs::path m_SubmissionTempDir;
+
+        Impl() = default;
+
+        Impl(Core::Configurator& cfg)
+        : m_JudgerPool{nullptr}
+        , m_SubmissionTempDir{}
+        {
+            size_t judger_num = cfg.get<int>("application", "JUDGER_NUMBER", std::thread::hardware_concurrency());
+            m_JudgerPool = std::make_unique<Core::ThreadPool>(judger_num);
+            m_SubmissionTempDir = fs::path{ cfg.get<std::string>("application", "SUBMISSION_TEMP_DIR", "./submission_temp/" ) };
+            if (!fs::exists(m_SubmissionTempDir)) {
+                fs::create_directories(m_SubmissionTempDir);
+                LOG_WARN("Creating Submission temp directory: {}", m_SubmissionTempDir.string());
+            }
+        }
+
+        ~Impl() = default;
+    };
+
 
     Application &Application::getInstance()
     {
@@ -15,159 +44,70 @@ namespace OJApp
         return *s_AppPtr;
     }
 
-    void Application::init(std::string_view host, int port)
+    void Application::init(std::string_view conf_file)
     {
-        Core::Logger::Init("oj-server", Core::Logger::Level::INFO, "logs/server.log", true, 1024, 2);
-        this->m_Host = host;
-        this->m_Port = port;
+        Core::Logger::Init("oj-server", Core::Logger::Level::INFO, "logs/server.log");
+        Core::Configurator cfg{ conf_file };
+        this->m_ImplPtr = std::make_unique<Impl>(cfg);
         this->m_HttpServer = std::make_unique<httplib::Server>();
-        this->m_JudgeManager = std::make_unique<Judge::JudgeManager>(
-            std::bind(&Application::judgeCallback, this, std::placeholders::_1, std::placeholders::_2));
-        this->m_ShutdownRequested = false;
-        this->m_IsRunning = false;
-        if (!fs::exists(SubmissionTempRootDir) && !fs::create_directory(SubmissionTempRootDir)) {
-            LOG_ERROR("Failed to create submission root directory: {}", SubmissionTempRootDir);
-            return;
-        }
     }
 
-    void Application::startServer()
+    void Application::run(std::string_view host, uint16_t port)
     {
-        this->m_HttpServerThread = std::make_unique<std::thread>([this]() {
-            LOG_INFO("HTTP Server Start");
-            this->m_HttpServer->listen(this->m_Host.data(), this->m_Port);
-            
-            // 服务器停止后的清理
-            if (this->m_ShutdownRequested) {
-                LOG_INFO("HTTP Server stopped");
-            } else {
-                LOG_WARN("HTTP Server stopped unexpectedly");
-            }
-        });
-    }
-
-    void Application::run()
-    {
-        this->m_IsRunning = true;
-        
-        // 等待关闭信号
-        {
-            std::unique_lock<std::mutex> lock(m_ShutdownMutex);
-            this->m_ShutdownCV.wait(lock, [this] { 
-                return this->m_ShutdownRequested.load(); 
-            });
-        }
-        
+        this->m_HttpServer->listen(host.data(), port);
         LOG_INFO("Main thread preparing to exit");
     }
-    void Application::stop()
+
+    using namespace Judge::Language;
+
+    void Application::submit(Judge::Submission &&submission)
     {
-        if (!m_ShutdownRequested) {
-            shutdownServer();
+        auto file_extension{ getFileExtension(submission.language_id) };
+        std::string source_path{ m_ImplPtr->m_SubmissionTempDir / (boost::uuids::to_string(submission.submission_id) + file_extension) };
+        asio::io_context ioc{};
+        try {
+            Core::FileWriter writer{ ioc };
+            writer.write(source_path.c_str(), std::get<std::string>(submission.uploade_code_file_path));
+        } catch (const std::exception &e) {
+            LOG_ERROR("Write Code File Error");
         }
-
-        // 等待HTTP线程结束
-        if (m_HttpServerThread && m_HttpServerThread->joinable()) {
-            m_HttpServerThread->join();
-            m_HttpServerThread.reset();
-        }
-
-        // 清理资源
-        m_JudgeManager.reset();
-        m_HttpServer.reset();
-        
-        
-        LOG_INFO("All resources cleaned up");
+        submission.uploade_code_file_path = fs::path(source_path);
+        m_ImplPtr->m_JudgerPool->enqueue([this](Judge::Submission sub){
+            
+        }, submission);
     }
-
-    void Application::processSubmission(Judge::Submission sub)
+    
+    void Application::processSubmission(Judge::Submission &&sub, asio::io_context& ioc)
     {
-        fs::path root_dir{ SubmissionTempRootDir };
-        root_dir /= boost::uuids::to_string(sub.submission_id);
-        if (fs::create_directory(root_dir)) {
-            // 写入源码
-            {
-                fs::path code_file{ root_dir / ("main" + Judge::Language::getFileExtension(sub.language_id)) };
-                std::ofstream file{ code_file, std::ios::trunc };
-                if (!file.is_open()) {
-                    LOG_ERROR("Failed to write source file: {}", (root_dir / sub.source_code_path).string());
-                    return;
-                }
-                file << sub.source_code_path << std::endl;
-                sub.source_code_path = code_file.generic_string();
+        // 读数据库 ， 找测试用例 ， 但是先阻塞返回一个生成器 ，
+        // 如果编译失败可以直接返回
+        // 运行每个测试前才正真读取数据库测试用例
+
+        // Judge::JudgeResult result{ sub.problem, sub.submission_id };
+        // 因为是生成器读取测试 ， 只要有一个错就不再评测 ， result不再需要测试用例数作为参数 ， 待改 ! ! !
+
+        std::unique_ptr<Judge::Compiler> compiler{ nullptr };
+        switch (sub.language_id)
+        {
+        case LangID::CPP:
+            compiler = Judge::createCompiler<Judge::CppCompiler>();
+            break;
+        default:
+            break;
+        }
+
+        if (!ioc.stopped()) {
+            ioc.run(); // 保证编译文件前 ， 文件已经写到磁盘上
+        }
+
+        if (compiler) { // 需要编译器的语言
+            auto source_path{ std::get<fs::path>(sub.uploade_code_file_path) };
+            auto exe_path{ source_path.parent_path() / "main" };
+            auto success{ compiler->compile(source_path.c_str(), exe_path.c_str(), sub.compile_options) };
+            if (!success) {
+                // 直接可以记录编译错误信息然后返回
+                return;
             }
-            LOG_INFO("process submission: {}", __FILE__);
-            this->m_JudgeManager->submit(std::forward<Judge::Submission>(sub));
-        }
-    }
-
-    void Application::WriteSubmissionToDB(const Judge::JudgeResult& result)
-    {
-        LOG_INFO("Submission Completed: {}", result.toString());
-    }
-
-    void Application::shutdownServer()
-    {
-        if (m_ShutdownRequested.exchange(true)) {
-            LOG_WARN("Shutdown already requested");
-            return;
-        }
-
-        LOG_INFO("shutdown...");
-        
-        // 1. 停止接受新请求
-        m_HttpServer->stop();
-        
-        // 2. 通知工作线程（如果有任务队列）
-        if (m_JudgeManager) {
-
-        }
-
-        // 3. 唤醒主线程
-        m_ShutdownCV.notify_one();
-    }
-
-    void Application::judgeCallback(Core::Types::SubID sub_id ,std::future<Judge::JudgeResult> &&result)
-    {
-        LOG_INFO("Get future of submission: {}", boost::uuids::to_string(sub_id));
-        result.get();
-        std::lock_guard<std::mutex> lock{ this->m_JudgeCacheMutex };
-        this->m_JudgeCache.emplace(sub_id, std::move(result));
-
-        if (this->m_JudgeCache.empty())
-            this->m_LastFlushTime = std::chrono::steady_clock::now();
-            return;
-
-        auto flushResultToDB{
-            [this] () -> void {
-                std::vector<std::future<void>> f{};
-                for (auto& [_, future] : m_JudgeCache) {
-                    try {
-                        auto val{ future.get() };
-                        f.emplace_back(std::async(std::launch::async, 
-                            std::bind(&Application::WriteSubmissionToDB, this, std::placeholders::_1), future.get()));
-                    } catch (const std::exception& e) {
-                        // TODO: 任务评测过程中出现的异常处理
-                        continue;
-                    }
-                }
-                for (auto&& fu : f) {
-                    try {
-                        fu.get();
-                    } catch (const std::exception& e) {
-                        // TODO: 写入数据库过程中发生的异常
-                    }
-                }
-            }
-        };
-
-        if (this->m_JudgeCache.size() == MaxCacheResultNum ||
-            std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::steady_clock::now() - this->m_LastFlushTime
-            ).count() >= CacheTimeout_s) {
-            flushResultToDB();
-            this->m_JudgeCache.clear();
-            this->m_LastFlushTime = std::chrono::steady_clock::now();
         }
     }
 }

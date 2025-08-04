@@ -3,11 +3,10 @@
 #include "Logger.hpp"
 #include "Core.hpp"
 #include "HttpMethod.hpp"
-#include "JudgeManager.hpp"
+#include "utilities/Submission.hpp"
 
 namespace OJApp
 {
-    using JudgeCacheContainer = std::map<Core::Types::SubID, std::future<Judge::JudgeResult>>;
 
     class Application
     {
@@ -28,40 +27,20 @@ namespace OJApp
             }
         }
 
-        void init(std::string_view host, int port);
-        void startServer();
-        void run();
-        void shutdownServer();
-        void stop();
-
-        void processSubmission(Judge::Submission sub);
-
-        void WriteSubmissionToDB(const Judge::JudgeResult& result);
-
+        void init(std::string_view conf_file);
+        void run(std::string_view host, uint16_t port);
+        void submit(Judge::Submission&& submission);
     private:
         Application() = default;
-        void judgeCallback(Core::Types::SubID id, std::future<Judge::JudgeResult>&& result);
+
+        void processSubmission(Judge::Submission&& sub, asio::io_context& ioc);
 
     private:
+        struct Impl;
+        std::unique_ptr<Impl> m_ImplPtr{ nullptr };
+        std::unique_ptr<httplib::Server> m_HttpServer{ nullptr };
+        
         static std::unique_ptr<Application> s_AppPtr;
-        std::atomic<bool> m_IsRunning{false};
-        std::atomic<bool> m_ShutdownRequested{false};  // 关闭请求标志
-        
-        std::unique_ptr<Judge::JudgeManager> m_JudgeManager{nullptr};
-        std::unique_ptr<httplib::Server> m_HttpServer{nullptr};
-        std::unique_ptr<std::thread> m_HttpServerThread{nullptr};
-        
-        // 同步原语
-        std::mutex m_ShutdownMutex;
-        std::condition_variable m_ShutdownCV;
-
-        // 提交 ID 和 评测句柄
-        std::mutex m_JudgeCacheMutex;
-        JudgeCacheContainer m_JudgeCache;
-        Core::Types::TimeStamp m_LastFlushTime;
-        
-        std::string_view m_Host{};
-        int m_Port{};
     };
 }
 

@@ -9,6 +9,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <boost/lockfree/queue.hpp>
 
 
 #include <filesystem>
@@ -40,5 +41,6 @@
 #include <tuple>
 #include <format>
 #include <atomic>
+#include <variant>
 
 #define BITMASK(x) (1ULL << (x))

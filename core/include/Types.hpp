@@ -11,6 +11,9 @@ namespace Core::Types
     using ExpectedOutput = std::string;
     using TestCase = std::pair<TestInput, ExpectedOutput>;
     using TestCases = std::vector<TestCase>;
+    template <typename T> using Queue = boost::lockfree::queue<T>;
 }
+
 namespace bp = boost::process;
 namespace fs = std::filesystem;
+namespace asio = boost::asio;

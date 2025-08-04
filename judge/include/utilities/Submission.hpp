@@ -11,7 +11,10 @@ namespace Judge
     struct Submission
     {
         std::string problem;
-        std::string source_code_path;
+        std::variant<std::monostate,
+                     std::string, 
+                     fs::path>
+            uploade_code_file_path;
         std::vector<std::string> compile_options;
         TestCases test_cases;
         SubID submission_id;
