@@ -18,12 +18,10 @@ namespace Judge
         void setupCgroupLimits(const ResourceLimits &limits, const fs::path& cgroup_path);
         void setupChildEnv(const ResourceLimits &limits);
 
-        void lanchProcess(bp::pipe &stdin_pipe,
-                          bp::pipe &stdout_pipe,
-                          bp::pipe &stderr_pipe,
-                          const fs::path &exe_path);
+        fs::path createCgroupForProcess(pid_t pid, const ResourceLimits& limits);
 
-        void setupCgroups(pid_t pid, const ResourceLimits &limits, const fs::path& cgroup_path);
+        void runChildProcess(int stdin_pipe[2], int stdout_pipe[2], int stderr_pipe[2], 
+                                      const fs::path& exe_path, const ResourceLimits& limits);
 
         void monitorChild(pid_t pid,
                           int stdout_fd,

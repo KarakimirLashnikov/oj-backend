@@ -13,7 +13,6 @@
 
 namespace Judge
 {
-
     void CppActuator::joinCgroup(const fs::path& cgroup_path) 
     {
         std::ofstream procs_file(cgroup_path / "cgroup.procs");
@@ -50,101 +49,104 @@ namespace Judge
             throw std::system_error(std::error_code(errno, std::system_category()), "fork error");
         }
         else if (child_pid == 0) {
-            fs::path cgroup_root = "/sys/fs/cgroup";
-            if (!fs::exists(cgroup_root)) {
-                cgroup_root = "/sys/fs/cgroup/unified";
-            }
-            std::string cgroup_name = "judge_" + std::to_string(getpid()) + "_" + std::to_string(child_pid);
-            fs::path cgroup_path = cgroup_root / cgroup_name;
-            
-            LOG_DEBUG("Creating cgroup at: {}", cgroup_path.string());
-            
-            // 提前创建cgroup目录并设置限制
-            try {
-                fs::create_directories(cgroup_path);
-                this->setupCgroupLimits(limits, cgroup_path);
-            } catch (const std::exception& e) {
-                LOG_ERROR("Cgroup setup failed: {}", e.what());
-            }
-            try{
-                this->joinCgroup(cgroup_path);
-            } catch (const std::exception& e) {
-                LOG_ERROR("Fail to join cgroup: {}", e.what());
-                exit(EXIT_FAILURE);
-            }
-            // 子进程 - 使用原始文件描述符
-            close(stdin_pipe[1]);   // 关闭父端写
-            close(stdout_pipe[0]);  // 关闭父端读
-            close(stderr_pipe[0]);  // 关闭父端读
-            
-            // 重定向标准IO
-            dup2(stdin_pipe[0], STDIN_FILENO);
-            dup2(stdout_pipe[1], STDOUT_FILENO);
-            dup2(stderr_pipe[1], STDERR_FILENO);
-            
-            // 关闭多余描述符
-            close(stdin_pipe[0]);
-            close(stdout_pipe[1]);
-            close(stderr_pipe[1]);
-            
-            // 临时禁用安全限制
-            this->setupChildEnv(limits);
-            
-            // 调试输出
-            dprintf(STDERR_FILENO, "Child process starting: PID=%d\n", getpid());
-            
-            // 执行程序
-            char* args[] = {const_cast<char*>(exe_path.filename().c_str()), nullptr};
-            execv(exe_path.c_str(), args);
-            
-            // 如果执行失败
-            dprintf(STDERR_FILENO, "execv failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
+            // 子进程逻辑
+            runChildProcess(stdin_pipe, stdout_pipe, stderr_pipe, exe_path, limits);
         }
-        else {
-            // 父进程
-            close(stdin_pipe[0]);   // 关闭子端读
-            close(stdout_pipe[1]);  // 关闭子端写
-            close(stderr_pipe[1]);  // 关闭子端写
-            
-            // 写入输入数据
-            if (!stdin_data.empty()) {
-                ssize_t written = write(stdin_pipe[1], stdin_data.data(), stdin_data.size());
-                if (written < 0) {
-                    LOG_ERROR("Failed to write stdin: {}", strerror(errno));
-                }
+        
+        // 父进程逻辑
+        close(stdin_pipe[0]);   // 关闭子端读
+        close(stdout_pipe[1]);  // 关闭子端写
+        close(stderr_pipe[1]);  // 关闭子端写
+        
+        // 写入输入数据
+        if (!stdin_data.empty()) {
+            ssize_t written = write(stdin_pipe[1], stdin_data.data(), stdin_data.size());
+            if (written < 0) {
+                LOG_ERROR("Failed to write stdin: {}", strerror(errno));
             }
-            close(stdin_pipe[1]);  // 关闭输入管道
-            
-            // 修正cgroup路径
-            fs::path cgroup_root = "/sys/fs/cgroup";
-            std::string cgroup_name = "judge_" + std::to_string(getpid()) + "_" + std::to_string(child_pid);
-            fs::path cgroup_path = cgroup_root / cgroup_name;
-            
-            LOG_DEBUG("Creating cgroup at: {}", cgroup_path.string());
-            
-            // 临时禁用cgroup
-            try {
-                this->setupCgroups(child_pid, limits, cgroup_path);
-            } catch (const std::exception& e) {
-                LOG_ERROR("Cgroup setup failed: {}", e.what());
-            }
-
-            ExecutionResult result;
-            this->monitorChild(child_pid, 
-                              stdout_pipe[0], 
-                              stderr_pipe[0], 
-                              start_time, 
-                              result, 
-                              limits,
-                              cgroup_path);
-
-            // 关闭管道
-            close(stdout_pipe[0]);
-            close(stderr_pipe[0]);
-
-            return result;
         }
+        close(stdin_pipe[1]);  // 关闭输入管道
+        
+        // 创建并设置cgroup
+        fs::path cgroup_path = createCgroupForProcess(child_pid, limits);
+        
+        ExecutionResult result;
+        this->monitorChild(child_pid, 
+                          stdout_pipe[0], 
+                          stderr_pipe[0], 
+                          start_time, 
+                          result, 
+                          limits,
+                          cgroup_path);
+
+        // 关闭管道
+        close(stdout_pipe[0]);
+        close(stderr_pipe[0]);
+
+        return result;
+    }
+
+    void CppActuator::runChildProcess(int stdin_pipe[2], int stdout_pipe[2], int stderr_pipe[2], 
+                                      const fs::path& exe_path, const ResourceLimits& limits)
+    {
+        // 关闭父端管道
+        close(stdin_pipe[1]);   // 关闭父端写
+        close(stdout_pipe[0]);  // 关闭父端读
+        close(stderr_pipe[0]);  // 关闭父端读
+        
+        // 重定向标准IO
+        dup2(stdin_pipe[0], STDIN_FILENO);
+        dup2(stdout_pipe[1], STDOUT_FILENO);
+        dup2(stderr_pipe[1], STDERR_FILENO);
+        
+        // 关闭多余描述符
+        close(stdin_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[1]);
+        
+        // 设置安全环境
+        setupChildEnv(limits);
+        
+        // 执行程序
+        char* args[] = {const_cast<char*>(exe_path.filename().c_str()), nullptr};
+        execv(exe_path.c_str(), args);
+        
+        // 如果执行失败
+        dprintf(STDERR_FILENO, "execv failed: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    fs::path CppActuator::createCgroupForProcess(pid_t pid, const ResourceLimits& limits)
+    {
+        fs::path cgroup_root = "/sys/fs/cgroup";
+        if (!fs::exists(cgroup_root)) {
+            cgroup_root = "/sys/fs/cgroup/unified";
+        }
+        std::string cgroup_name = "judge_" + std::to_string(getpid()) + "_" + std::to_string(pid);
+        fs::path cgroup_path = cgroup_root / cgroup_name;
+        
+        LOG_DEBUG("Creating cgroup at: {}", cgroup_path.string());
+        
+        // 创建cgroup目录
+        if (!fs::create_directories(cgroup_path)) {
+            throw std::runtime_error("Failed to create cgroup directory: " + cgroup_path.string());
+        }
+        
+        // 设置cgroup限制
+        setupCgroupLimits(limits, cgroup_path);
+        
+        // 将进程加入cgroup
+        std::ofstream procs_file(cgroup_path / "cgroup.procs");
+        if (!procs_file) {
+            throw std::runtime_error("无法写入 cgroup.procs: " + 
+                std::string(strerror(errno)) + " at " + 
+                (cgroup_path / "cgroup.procs").string());
+        }
+        procs_file << pid << std::endl;
+        procs_file.close();
+        
+        LOG_DEBUG("Cgroup setup completed for PID: {}", pid);
+        return cgroup_path;
     }
 
     void CppActuator::setupCgroupLimits(const ResourceLimits &limits, const fs::path& cgroup_path)
@@ -167,7 +169,7 @@ namespace Judge
 
     void CppActuator::setupChildEnv(const ResourceLimits &limits)
     {
-        // 1. 先设置资源限制
+        // 1. 设置资源限制
         struct rlimit stack_limit{
             .rlim_cur = static_cast<rlim_t>(limits.stack_limit_kb * 1024),
             .rlim_max = static_cast<rlim_t>(limits.stack_limit_kb * 1024)};
@@ -228,74 +230,6 @@ USE sample DEFAULT KILL)KAFEL";
             exit(EXIT_FAILURE);
         }
         free(prog.filter);
-    }
-
-    void CppActuator::lanchProcess(bp::pipe &stdin_pipe,
-                                   bp::pipe &stdout_pipe,
-                                   bp::pipe &stderr_pipe,
-                                   const fs::path &exe_path)
-    {
-        // 重定向标准流
-        dup2(stdin_pipe.native_source(), STDIN_FILENO);
-        dup2(stdout_pipe.native_sink(), STDOUT_FILENO);
-        dup2(stderr_pipe.native_sink(), STDERR_FILENO);
-        // ==================================
-
-        // 关闭所有管道描述符
-        stdin_pipe.close();
-        stdout_pipe.close();
-        stderr_pipe.close();
-
-        // 关闭所有可能的打开文件描述符
-        for (int fd = sysconf(_SC_OPEN_MAX); fd > 2; fd--) {
-            close(fd);
-        }
-
-        if (setgid(1000) != 0 || setuid(1000) != 0) {
-            perror("降低权限失败");
-            exit(EXIT_FAILURE);
-        }
-
-        // 执行程序
-        execl(exe_path.c_str(), exe_path.filename().c_str(), nullptr);
-        perror("execl failed");
-        exit(EXIT_FAILURE);
-    }
-
-    void CppActuator::setupCgroups(pid_t pid, const ResourceLimits &limits, const fs::path& cgroup_path)
-    {
-        LOG_DEBUG("Setting up cgroups at: {}", cgroup_path.string());
-        
-        // 创建cgroup目录
-        if (!fs::create_directories(cgroup_path)) {
-            throw std::runtime_error("Failed to create cgroup directory: " + cgroup_path.string());
-        }
-        
-        // 将进程加入cgroup
-        std::ofstream procs_file(cgroup_path / "cgroup.procs");
-        if (!procs_file) {
-            throw std::runtime_error("无法写入 cgroup.procs: " + 
-                std::string(strerror(errno)) + " at " + 
-                (cgroup_path / "cgroup.procs").string());
-        }
-        procs_file << pid << std::endl;
-        procs_file.close();
-
-        // 设置CPU时间限制
-        std::ofstream cpu_max_file(cgroup_path / "cpu.max");
-        if (!cpu_max_file) {
-            throw std::runtime_error("无法写入 cpu.max");
-        }
-        // 格式: $MAX $PERIOD (单位: 微秒)
-        cpu_max_file << (static_cast<uint64_t>(limits.cpu_time_limit_s * 1000000)) << " 1000000" << std::endl;
-        cpu_max_file.close();
-
-        // 设置内存限制
-        std::ofstream(cgroup_path / "memory.max") << (limits.memory_limit_kb * 1024) << std::endl;
-        std::ofstream(cgroup_path / "memory.swap.max") << "0" << std::endl;
-        std::ofstream(cgroup_path / "memory.oom.group") << "1" << std::endl;
-        
-        LOG_DEBUG("Cgroup setup completed for PID: {}", pid);
     }
 
     void CppActuator::monitorChild(pid_t pid,
