@@ -8,6 +8,8 @@
 #include <sched.h>
 #include <sys/mount.h>
 #include "Logger.hpp"
+#include <sys/prctl.h>
+#include <asm/unistd.h>
 
 namespace Judge
 {
@@ -141,13 +143,16 @@ namespace Judge
             exit(EXIT_FAILURE);
         }
 
-        const char* policy = R"(
-        DEFAULT KILL
-        ALLOW @stdio
-        ALLOW @process
-        ALLOW @file-io
-        )";
-        
+        const char* policy = R"KAFEL(POLICY sample {
+	ALLOW {
+		write {
+			(fd & buf) != 123
+		}
+	}
+}
+
+USE sample DEFAULT KILL)KAFEL";
+
         kafel_ctxt_t ctxt = kafel_ctxt_create();
         kafel_set_input_string(ctxt, policy);
         struct sock_fprog prog;
@@ -161,8 +166,15 @@ namespace Judge
         kafel_ctxt_destroy(&ctxt);
         
         // 加载策略
-        if (seccomp_load(reinterpret_cast<scmp_filter_ctx>(prog.filter))) {
+        scmp_filter_ctx ctx{ seccomp_init(SCMP_ACT_KILL) };
+        if (!ctx) {
+            perror("faild to init seccomp filter");
+            free(prog.filter);
+            exit(EXIT_FAILURE);
+        }
+        if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
             perror("faild to load filter");
+            seccomp_release(ctx);
             free(prog.filter);
             exit(EXIT_FAILURE);
         }
