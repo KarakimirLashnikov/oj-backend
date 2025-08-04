@@ -14,9 +14,9 @@ namespace Judge
                                 std::string_view stdin_data = "") override;
 
     private:
+        void joinCgroup(const fs::path& cgroup_path);
+        void setupCgroupLimits(const ResourceLimits &limits, const fs::path& cgroup_path);
         void setupChildEnv(const ResourceLimits &limits);
-
-        void allowSyscalls(scmp_filter_ctx ctx);
 
         void lanchProcess(bp::pipe &stdin_pipe,
                           bp::pipe &stdout_pipe,

@@ -41,6 +41,7 @@ namespace Judge
         int exit_code{-1};
         int memory_kb{-1};
         int signal{-1};
+        uint64_t cpu_time_us;
         TimeStamp create_at{};
         TimeStamp finish_at{};
         TestStatus status = TestStatus::UNKNOWN;

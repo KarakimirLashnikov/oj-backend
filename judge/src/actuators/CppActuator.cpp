@@ -13,6 +13,18 @@
 
 namespace Judge
 {
+
+    void CppActuator::joinCgroup(const fs::path& cgroup_path) 
+    {
+        std::ofstream procs_file(cgroup_path / "cgroup.procs");
+        if (!procs_file) {
+            throw std::runtime_error("join cgroup.procs failed: " + 
+                std::string(strerror(errno)));
+        }
+        procs_file << getpid() << std::endl;
+        LOG_DEBUG("Process {} joined cgroup {}", getpid(), cgroup_path.string());
+    }
+
     ExecutionResult CppActuator::execute(fs::path exe_path, const ResourceLimits &limits, std::string_view stdin_data)
     {
         LOG_DEBUG("Executing: {}", exe_path.string());
@@ -38,6 +50,28 @@ namespace Judge
             throw std::system_error(std::error_code(errno, std::system_category()), "fork error");
         }
         else if (child_pid == 0) {
+            fs::path cgroup_root = "/sys/fs/cgroup";
+            if (!fs::exists(cgroup_root)) {
+                cgroup_root = "/sys/fs/cgroup/unified";
+            }
+            std::string cgroup_name = "judge_" + std::to_string(getpid()) + "_" + std::to_string(child_pid);
+            fs::path cgroup_path = cgroup_root / cgroup_name;
+            
+            LOG_DEBUG("Creating cgroup at: {}", cgroup_path.string());
+            
+            // 提前创建cgroup目录并设置限制
+            try {
+                fs::create_directories(cgroup_path);
+                this->setupCgroupLimits(limits, cgroup_path);
+            } catch (const std::exception& e) {
+                LOG_ERROR("Cgroup setup failed: {}", e.what());
+            }
+            try{
+                this->joinCgroup(cgroup_path);
+            } catch (const std::exception& e) {
+                LOG_ERROR("Fail to join cgroup: {}", e.what());
+                exit(EXIT_FAILURE);
+            }
             // 子进程 - 使用原始文件描述符
             close(stdin_pipe[1]);   // 关闭父端写
             close(stdout_pipe[0]);  // 关闭父端读
@@ -84,9 +118,6 @@ namespace Judge
             
             // 修正cgroup路径
             fs::path cgroup_root = "/sys/fs/cgroup";
-            if (!fs::exists(cgroup_root)) {
-                cgroup_root = "/sys/fs/cgroup/unified";
-            }
             std::string cgroup_name = "judge_" + std::to_string(getpid()) + "_" + std::to_string(child_pid);
             fs::path cgroup_path = cgroup_root / cgroup_name;
             
@@ -116,6 +147,24 @@ namespace Judge
         }
     }
 
+    void CppActuator::setupCgroupLimits(const ResourceLimits &limits, const fs::path& cgroup_path)
+    {
+        LOG_DEBUG("Setting cgroup limits at: {}", cgroup_path.string());
+        
+        // 设置CPU时间限制
+        std::ofstream cpu_max_file(cgroup_path / "cpu.max");
+        if (cpu_max_file) {
+            cpu_max_file << (static_cast<uint64_t>(limits.cpu_time_limit_s * 1000000)) << " 1000000" << std::endl;
+        } else {
+            LOG_WARN("Failed to write cpu.max");
+        }
+
+        // 设置内存限制
+        std::ofstream(cgroup_path / "memory.max") << (limits.memory_limit_kb * 1024) << std::endl;
+        std::ofstream(cgroup_path / "memory.swap.max") << "0" << std::endl;
+        std::ofstream(cgroup_path / "memory.oom.group") << "1" << std::endl;
+    }
+
     void CppActuator::setupChildEnv(const ResourceLimits &limits)
     {
         // 1. 先设置资源限制
@@ -127,7 +176,7 @@ namespace Judge
         signal(SIGPIPE, SIG_IGN);
         
         // 2. 创建命名空间
-        if (unshare(CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUTS) != 0) {
+        if (unshare(CLONE_NEWNS | CLONE_NEWUTS) != 0) {
             perror("unshare failed");
             exit(EXIT_FAILURE);
         }
@@ -360,15 +409,28 @@ USE sample DEFAULT KILL)KAFEL";
         result.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
         result.signal = WIFSIGNALED(status) ? WTERMSIG(status) : 0;
         
-        // 读取cgroup中的内存使用信息
         try {
+            // 读取内存峰值
             if (fs::exists(cgroup_path / "memory.peak")) {
                 std::ifstream mem_file(cgroup_path / "memory.peak");
                 if (mem_file) {
                     uint64_t mem_peak = 0;
                     mem_file >> mem_peak;
-                    result.memory_kb = mem_peak / 1024; // 转换为KB
-                    LOG_DEBUG("Memory peak: {} KB", result.memory_kb);
+                    result.memory_kb = mem_peak / 1024;
+                }
+            }
+            
+            // 新增：读取CPU时间统计
+            if (fs::exists(cgroup_path / "cpu.stat")) {
+                std::ifstream cpu_stat(cgroup_path / "cpu.stat");
+                std::string line;
+                while (std::getline(cpu_stat, line)) {
+                    if (line.find("usage_usec") == 0) {
+                        uint64_t cpu_us;
+                        if (sscanf(line.c_str(), "usage_usec %lu", &cpu_us) == 1) {
+                            result.cpu_time_us = cpu_us;
+                        }
+                    }
                 }
             }
         } catch (const std::exception& e) {
@@ -409,7 +471,7 @@ USE sample DEFAULT KILL)KAFEL";
             LOG_DEBUG("Normal exit, return code {}.", result.exit_code);
         }
 
-        auto str{ std::format("memeory: {}\nstderr: {}\nsignal: {}\nexit_code: {}\nstdout: {}\n", result.memory_kb, result.stderr, result.signal, result.exit_code, result.stdout)};
+        auto str{ std::format("memeory: {}\nstderr: {}\nsignal: {}\nexit_code: {}\nstdout: {}\ncpu_time_us: {}us\n", result.memory_kb, result.stderr, result.signal, result.exit_code, result.stdout, result.cpu_time_us) };
         LOG_INFO("result:\n{}", str.c_str());
 
         // 清理cgroup - 不再使用线程延迟清理
