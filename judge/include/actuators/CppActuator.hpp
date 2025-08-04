@@ -26,13 +26,13 @@ namespace Judge
         void setupCgroups(pid_t pid, const ResourceLimits &limits, const fs::path& cgroup_path);
 
         void monitorChild(pid_t pid,
-                          bp::ipstream &stdout_stream,
-                          bp::ipstream &stderr_stream,
+                          int stdout_fd,
+                          int stderr_fd,
                           const TimeStamp &start_time,
                           ExecutionResult &result,
                           const ResourceLimits &limits,
                           const fs::path& cgroup_path);
 
-        void cleanupCgroups(const fs::path& path) override;
+        void cleanupCgroup(const fs::path& path);
     };
 }

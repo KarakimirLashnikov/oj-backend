@@ -12,6 +12,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/cpp-httplib
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/json/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/inih
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/kafel/include
 )
 
 add_subdirectory(core)
@@ -50,37 +51,4 @@ target_link_libraries(
     CoreLayer 
     JudgeLayer
     AppLayer
-)
-
-# 定义配置文件源路径和目标路径
-set(CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/config/config.ini")
-set(TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}")
-
-# 复制配置文件到构建目录
-add_custom_command(
-    TARGET oj-backend POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-        "${CONFIG_FILE}"
-        "${TARGET_DIR}/config.ini"
-    COMMENT "Copying config.ini to executable directory"
-)
-
-# 配置运行脚本（使用pkexec/sudo运行）
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/run_oj-backend.sh.in
-    ${CMAKE_CURRENT_BINARY_DIR}/run_oj-backend.sh
-    @ONLY
-)
-
-# 设置脚本权限
-add_custom_command(
-    TARGET oj-backend POST_BUILD
-    COMMAND chmod +x ${CMAKE_CURRENT_BINARY_DIR}/run_oj-backend.sh
-)
-
-# 添加运行目标
-add_custom_target(run
-    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/run_oj-backend.sh
-    DEPENDS oj-backend
-    COMMENT "Running oj-backend with elevated privileges..."
 )

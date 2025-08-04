@@ -1,8 +1,0 @@
-#!/bin/bash
-# 使用 pkexec 进行图形化授权（如果可用）
-if command -v pkexec &> /dev/null; then
-    pkexec @CMAKE_CURRENT_BINARY_DIR@/oj-backend
-else
-    # 回退到 sudo
-    sudo @CMAKE_CURRENT_BINARY_DIR@/oj-backend
-fi

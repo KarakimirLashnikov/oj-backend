@@ -6,6 +6,8 @@ add_subdirectory(cpp-httplib)
 add_subdirectory(spdlog)
 add_subdirectory(json)
 add_subdirectory(inih)
+add_subdirectory(kafel)
+
 
 target_link_libraries(
     ThirdParty  
@@ -14,4 +16,5 @@ target_link_libraries(
     spdlog::spdlog
     nlohmann_json
     inih
+    kafel_static
 )

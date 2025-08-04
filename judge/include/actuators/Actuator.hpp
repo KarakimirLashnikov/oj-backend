@@ -16,8 +16,6 @@ namespace Judge
         virtual ExecutionResult execute(fs::path exe_path,
                                         const ResourceLimits& limits,
                                         std::string_view stdin_data = "") = 0;
-
-        virtual void cleanupCgroups(const fs::path& cgroup_path) = 0;
     };
 
     template <typename TActuator, typename... Args>
