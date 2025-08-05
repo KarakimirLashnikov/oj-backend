@@ -16,7 +16,6 @@ namespace Judge
                      fs::path>
             uploade_code_file_path;
         std::vector<std::string> compile_options;
-        TestCases test_cases;
         SubID submission_id;
         float cpu_time_limit_s;
         float cpu_extra_time_s;

@@ -76,3 +76,5 @@ add_library(kafel_static STATIC ${SRCS})
 set_target_properties(kafel_static PROPERTIES OUTPUT_NAME kafel)
 ```
 9. sudo apt-get install flex bison
+10. sudo apt-get install mysql-server libmysqlclient-dev
+11. mysql --version -> 将 version 填入 ./database/CMakeLists.txt 中的 set(MYSQL_CONNECTOR_VERSION  ???)

@@ -8,7 +8,6 @@ namespace OJApp::API
 {
     using njson = nlohmann::json;
     using Judge::Submission;
-    using Core::Types::TestCase;
     using Core::Types::SubID;
     using Judge::LangID;
 

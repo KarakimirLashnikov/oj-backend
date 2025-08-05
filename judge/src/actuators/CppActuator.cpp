@@ -10,80 +10,249 @@
 #include "Logger.hpp"
 #include <sys/prctl.h>
 #include <asm/unistd.h>
+#include <linux/seccomp.h>
+#include "FileException.hpp"
+#include "SystemException.hpp"
+#include <cstdio>
+#include <cstring>
+
+constexpr static const char* KAFEL_POLICY { R"KAFEL(
+    POLICY oj_sandbox {
+        // ==================== 允许的系统调用 ====================
+        ALLOW {
+            // 基本 I/O ( 仅允许 stdin/stdout/stderr )
+            read {
+                fd == 0  // stdin
+            }
+            write {
+                fd == 1 || fd == 2  // stdout/stderr
+            }
+            close {
+                fd == 0 || fd == 1 || fd == 2  // 允许关闭标准流
+            }
+
+            // 内存管理（允许基本的堆栈操作）
+            brk,
+            mmap {
+                prot == PROT_READ | PROT_WRITE,
+                flags == MAP_PRIVATE | MAP_ANONYMOUS
+            },
+            munmap,
+            mprotect {
+                prot == PROT_READ | PROT_WRITE | PROT_EXEC
+            }
+
+            // 基本进程控制（仅允许正常退出）
+            exit,
+            exit_group,
+            rt_sigreturn,
+
+            // 时间测量（允许获取运行时间）
+            clock_gettime,
+            gettimeofday,
+
+            // 架构相关(x86_64 常见调用)
+            arch_prctl,
+            set_tid_address,
+            futex {
+                // 仅允许 FUTEX_WAIT 和 FUTEX_WAKE(防止滥用)
+                op == FUTEX_WAIT || op == FUTEX_WAKE
+            }
+        }
+
+        // ==================== 拒绝的危险系统调用 ====================
+        DENY {
+            // 文件系统(禁止所有文件访问)
+            open,
+            openat,
+            creat,
+            unlink,
+            mkdir,
+            rmdir,
+            chmod,
+            chown,
+            rename,
+            symlink,
+            readlink,
+            stat,
+            lstat,
+            fstat,
+
+            // 网络(禁止所有网络访问)
+            socket,
+            connect,
+            bind,
+            listen,
+            accept,
+            sendto,
+            recvfrom,
+            sendmsg,
+            recvmsg,
+            shutdown,
+
+            // 进程控制(禁止 fork/exec)
+            fork,
+            vfork,
+            clone,
+            execve,
+            kill,
+            tkill,
+            tgkill,
+
+            // 系统信息（禁止获取敏感信息）
+            getpid,
+            getppid,
+            getuid,
+            getgid,
+            geteuid,
+            getegid,
+            getrandom,
+            sysinfo,
+
+            // 其他危险调用
+            ptrace,
+            prctl,
+            seccomp,
+            ioctl  // 禁止设备控制
+        }
+    }
+
+    // 应用策略，默认拒绝并终止进程
+    USE oj_sandbox DEFAULT KILL
+)KAFEL" };
+
+static std::once_flag ONCE_FLAG{};
+static sock_fprog SHARED_SECCOMP{};
+static bool IS_SYSTEM_INITIALIZED { false };
+constexpr static const char *CGROUP_ROOT{ "/sys/fs/cgroup" };
 
 namespace Judge
 {
+    void CppActuator::initSystem()
+    {
+        std::call_once(::ONCE_FLAG, [](){  
+            // 1. 检查/proc目录
+            Exceptions::checkFileExists("/proc");
+            Exceptions::checkFileWritable("/proc");
+            
+            // 2. 检查cgroup根目录
+            Exceptions::checkFileExists(::CGROUP_ROOT);
+            Exceptions::checkFileWritable(::CGROUP_ROOT);
+            
+            // 3. 编译Kafel策略
+            kafel_ctxt_t ctxt = kafel_ctxt_create();
+            kafel_set_input_string(ctxt, ::KAFEL_POLICY);
+            if (kafel_compile(ctxt, &::SHARED_SECCOMP) != 0) {
+                const char* error_msg = kafel_error_msg(ctxt);
+                kafel_ctxt_destroy(&ctxt);
+                throw Exceptions::SystemException(-1, error_msg);
+            }
+            kafel_ctxt_destroy(&ctxt);
+            
+            // 4. 注册退出时释放资源的函数
+            atexit([]() {
+                if (::SHARED_SECCOMP.filter) {
+                    free(::SHARED_SECCOMP.filter);
+                    ::SHARED_SECCOMP.filter = nullptr;
+                }
+            });
+            
+            ::IS_SYSTEM_INITIALIZED = true;
+            LOG_INFO("Global initialization completed");
+        });
+    }
+
+    CppActuator::CppActuator()
+    {
+        if (!IS_SYSTEM_INITIALIZED) 
+            throw Exceptions::SystemException(-1, "system not initialized");
+
+        if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
+            throw Exceptions::SystemException(errno, "prctl(PR_SET_NO_NEW_PRIVS)");
+        }
+    }
+
     void CppActuator::joinCgroup(const fs::path& cgroup_path) 
     {
+        Exceptions::checkFileExists(cgroup_path);
+        Exceptions::checkFileWritable(cgroup_path);
         std::ofstream procs_file(cgroup_path / "cgroup.procs");
         if (!procs_file) {
-            throw std::runtime_error("join cgroup.procs failed: " + 
-                std::string(strerror(errno)));
+            throw Exceptions::makeSystemException("Open cgroup.procs in CppActuator::joinCgroup");
         }
         procs_file << getpid() << std::endl;
-        LOG_DEBUG("Process {} joined cgroup {}", getpid(), cgroup_path.string());
     }
 
     ExecutionResult CppActuator::execute(fs::path exe_path, const ResourceLimits &limits, std::string_view stdin_data)
     {
-        LOG_DEBUG("Executing: {}", exe_path.string());
-        
-        // 确保可执行文件存在且有权限
-        if (!fs::exists(exe_path)) {
-            throw std::runtime_error("Executable not found: " + exe_path.string());
-        }
-        if (access(exe_path.c_str(), X_OK) != 0) {
-            throw std::runtime_error("No execute permission: " + exe_path.string());
-        }
+        Exceptions::checkFileExists(exe_path.string());
+        Exceptions::checkFileExecutable(exe_path.string());
 
-        // 使用匿名管道
+        // 使用匿名管道 , 0 为父端， 1 为子端
         int stdout_pipe[2], stderr_pipe[2], stdin_pipe[2];
-        if (pipe(stdout_pipe)) throw std::runtime_error("pipe stdout failed");
-        if (pipe(stderr_pipe)) throw std::runtime_error("pipe stderr failed");
-        if (pipe(stdin_pipe)) throw std::runtime_error("pipe stdin failed");
+        if (pipe(stdout_pipe)) throw Exceptions::SystemException(errno, "pipe stdout failed");
+        if (pipe(stderr_pipe)) throw Exceptions::SystemException(errno, "pipe stderr failed");
+        if (pipe(stdin_pipe)) throw Exceptions::SystemException(errno, "pipe stdin failed");
 
-        auto start_time = std::chrono::steady_clock::now();
+        auto start_time{ std::chrono::steady_clock::now() };
         
-        pid_t child_pid = fork();
+        pid_t child_pid{ fork() };
         if (child_pid < 0) {
-            throw std::system_error(std::error_code(errno, std::system_category()), "fork error");
+            throw Exceptions::SystemException(errno, "fork failed");
         }
         else if (child_pid == 0) {
             // 子进程逻辑
             runChildProcess(stdin_pipe, stdout_pipe, stderr_pipe, exe_path, limits);
+            dprintf(STDERR_FILENO, "execv failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
         }
         
         // 父进程逻辑
-        close(stdin_pipe[0]);   // 关闭子端读
-        close(stdout_pipe[1]);  // 关闭子端写
-        close(stderr_pipe[1]);  // 关闭子端写
+        close(stdin_pipe[0]);   // 关闭父的输入管道
+        close(stdout_pipe[1]);  // 关闭子的输出管道
+        close(stderr_pipe[1]);  // 关闭子的输出管道
         
-        // 写入输入数据
         if (!stdin_data.empty()) {
-            ssize_t written = write(stdin_pipe[1], stdin_data.data(), stdin_data.size());
-            if (written < 0) {
-                LOG_ERROR("Failed to write stdin: {}", strerror(errno));
+            size_t total_written = 0;
+            while (total_written < stdin_data.size()) {
+                ssize_t written = write(stdin_pipe[1], stdin_data.data() + total_written, stdin_data.size() - total_written);
+                if (written < 0) {
+                    // 释放资源，准备退出
+                    kill(child_pid, SIGKILL);
+                    waitpid(child_pid, nullptr, 0);
+                    close(stdin_pipe[1]);
+                    close(stdout_pipe[0]);
+                    close(stderr_pipe[0]);
+                    throw Exceptions::makeSystemException(
+                        "write to child's stdin failed in CppActuator::execute: " + std::string(strerror(errno)));
+                }
+                total_written += written;
             }
         }
-        close(stdin_pipe[1]);  // 关闭输入管道
+        // 正常关闭 stdin 管道
+        close(stdin_pipe[1]);
         
         // 创建并设置cgroup
-        fs::path cgroup_path = createCgroupForProcess(child_pid, limits);
-        
-        ExecutionResult result;
-        this->monitorChild(child_pid, 
-                          stdout_pipe[0], 
-                          stderr_pipe[0], 
-                          start_time, 
-                          result, 
-                          limits,
-                          cgroup_path);
+        try {
+            fs::path cgroup_path{ createCgroupForProcess(child_pid, limits) };
+            ExecutionResult result;
+            this->monitorChild(child_pid, 
+                            stdout_pipe[0], // 子向父端输入
+                            stderr_pipe[0], // 子向父端输入
+                            start_time, 
+                            result, 
+                            limits,
+                            cgroup_path);
+                             // 关闭管道
+            close(stdout_pipe[0]);
+            close(stderr_pipe[0]);
 
-        // 关闭管道
-        close(stdout_pipe[0]);
-        close(stderr_pipe[0]);
-
-        return result;
+            return result;
+        } catch (const Exceptions::FileException& fe) {
+            close(stdout_pipe[0]);
+            close(stderr_pipe[0]);
+            throw fe;
+        }
     }
 
     void CppActuator::runChildProcess(int stdin_pipe[2], int stdout_pipe[2], int stderr_pipe[2], 
@@ -110,26 +279,17 @@ namespace Judge
         // 执行程序
         char* args[] = {const_cast<char*>(exe_path.filename().c_str()), nullptr};
         execv(exe_path.c_str(), args);
-        
-        // 如果执行失败
-        dprintf(STDERR_FILENO, "execv failed: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
     }
 
     fs::path CppActuator::createCgroupForProcess(pid_t pid, const ResourceLimits& limits)
     {
-        fs::path cgroup_root = "/sys/fs/cgroup";
-        if (!fs::exists(cgroup_root)) {
-            cgroup_root = "/sys/fs/cgroup/unified";
-        }
+        fs::path cgroup_root = ::CGROUP_ROOT;
         std::string cgroup_name = "judge_" + std::to_string(getpid()) + "_" + std::to_string(pid);
         fs::path cgroup_path = cgroup_root / cgroup_name;
         
-        LOG_DEBUG("Creating cgroup at: {}", cgroup_path.string());
-        
         // 创建cgroup目录
         if (!fs::create_directories(cgroup_path)) {
-            throw std::runtime_error("Failed to create cgroup directory: " + cgroup_path.string());
+            throw Exceptions::makeFileException(cgroup_path.c_str(), "create cgroup for child process");
         }
         
         // 设置cgroup限制
@@ -138,9 +298,7 @@ namespace Judge
         // 将进程加入cgroup
         std::ofstream procs_file(cgroup_path / "cgroup.procs");
         if (!procs_file) {
-            throw std::runtime_error("无法写入 cgroup.procs: " + 
-                std::string(strerror(errno)) + " at " + 
-                (cgroup_path / "cgroup.procs").string());
+            throw Exceptions::makeFileException(cgroup_path / "cgroup.procs", "open cgroup.procs");
         }
         procs_file << pid << std::endl;
         procs_file.close();
@@ -151,8 +309,6 @@ namespace Judge
 
     void CppActuator::setupCgroupLimits(const ResourceLimits &limits, const fs::path& cgroup_path)
     {
-        LOG_DEBUG("Setting cgroup limits at: {}", cgroup_path.string());
-        
         // 设置CPU时间限制
         std::ofstream cpu_max_file(cgroup_path / "cpu.max");
         if (cpu_max_file) {
@@ -186,50 +342,20 @@ namespace Judge
         // 3. 挂载 proc
         if (mount("proc", "/proc", "proc", MS_NOSUID | MS_NOEXEC | MS_NODEV, nullptr) != 0) {
             perror("mount proc failed");
+            exit(EXIT_FAILURE);
         }
         
-        // 4. 降低权限
+        // 4. 加载全局安全策略
+        if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &::SHARED_SECCOMP) == -1) {
+            perror("prctl(PR_SET_SECCOMP) failed");
+            exit(EXIT_FAILURE);
+        }
+
+        // 5. 降低权限
         if (setgid(1000) != 0 || setuid(1000) != 0) {
             perror("Failed to drop privileges");
             exit(EXIT_FAILURE);
         }
-
-        const char* policy = R"KAFEL(POLICY sample {
-	ALLOW {
-		write {
-			(fd & buf) != 123
-		}
-	}
-}
-
-USE sample DEFAULT KILL)KAFEL";
-
-        kafel_ctxt_t ctxt = kafel_ctxt_create();
-        kafel_set_input_string(ctxt, policy);
-        struct sock_fprog prog;
-        int compile_result = kafel_compile(ctxt, &prog);
-        if (compile_result != 0) {
-            const char* error_msg = kafel_error_msg(ctxt);
-            dprintf(STDERR_FILENO, "Kafel编译失败: %s\n", error_msg);
-            kafel_ctxt_destroy(&ctxt);
-            exit(EXIT_FAILURE);
-        }
-        kafel_ctxt_destroy(&ctxt);
-        
-        // 加载策略
-        scmp_filter_ctx ctx{ seccomp_init(SCMP_ACT_KILL) };
-        if (!ctx) {
-            perror("faild to init seccomp filter");
-            free(prog.filter);
-            exit(EXIT_FAILURE);
-        }
-        if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
-            perror("faild to load filter");
-            seccomp_release(ctx);
-            free(prog.filter);
-            exit(EXIT_FAILURE);
-        }
-        free(prog.filter);
     }
 
     void CppActuator::monitorChild(pid_t pid,
@@ -274,7 +400,7 @@ USE sample DEFAULT KILL)KAFEL";
             
             int ret = poll(fds, 2, timeout_ms);
             if (ret < 0) {
-                if (errno == EINTR) continue;
+                if (errno == EINTR) continue; // 被信号打断，忽略
                 LOG_ERROR("poll error: {}", strerror(errno));
                 break;
             }
@@ -354,7 +480,7 @@ USE sample DEFAULT KILL)KAFEL";
                 }
             }
             
-            // 新增：读取CPU时间统计
+            // 读取CPU时间统计
             if (fs::exists(cgroup_path / "cpu.stat")) {
                 std::ifstream cpu_stat(cgroup_path / "cpu.stat");
                 std::string line;
@@ -369,53 +495,35 @@ USE sample DEFAULT KILL)KAFEL";
             }
         } catch (const std::exception& e) {
             LOG_ERROR("Failed to read cgroup stats: {}", e.what());
+            result.cpu_time_us = 0;
+            result.memory_kb = 0;
+            result.status = TestStatus::INTERNAL_ERROR;
+            cleanupCgroup(cgroup_path);
+            return;
         }
         
-        LOG_DEBUG("Process exited with code: {}, signal: {}", 
-                 result.exit_code, result.signal);
-        LOG_DEBUG("STDOUT size: {}, STDERR size: {}", 
-                 result.stdout.size(), result.stderr.size());
-        
-        result.create_at = start_time;
-        result.finish_at = std::chrono::steady_clock::now();
-        
-        // 读取cgroup中的最大内存使用量
-        int mem_peak = 0;
-        std::ifstream mem_file(cgroup_path / "memory.peak");
-        if (mem_file) {
-            mem_file >> mem_peak;
-            mem_peak /= 1024; // 转换为KB
-        }
-        result.memory_kb = mem_peak;
-
         result.create_at = start_time;
         result.finish_at = std::chrono::steady_clock::now();
 
         // 判断退出原因
         if (timeout) {
-            LOG_DEBUG("Process timed out.");
+            result.status = TestStatus::TIME_LIMIT_EXCEEDED;
         } else if (result.memory_kb >= limits.memory_limit_kb) {
-            LOG_DEBUG("Process exceeds memory limit: {} KB > {} KB.", result.memory_kb, limits.memory_limit_kb);
-        } else if (result.signal == SIGSEGV && 
-                result.memory_kb < limits.memory_limit_kb) {
-            LOG_DEBUG("Process Segmentation Fault, but not exceed memory limit: {} KB < {} KB.", result.memory_kb, limits.memory_limit_kb);
+            result.status = TestStatus::MEMORY_LIMIT_EXCEEDED;
         } else if (result.signal != 0 || result.exit_code != 0) {
-            LOG_DEBUG("Process return error code {} or signal {}", result.exit_code, result.signal);
+            result.status = TestStatus::RUNTIME_ERROR;
         } else {
-            LOG_DEBUG("Normal exit, return code {}.", result.exit_code);
+            result.status = TestStatus::WRONG_ANSWER; // 未判定 , 默认 WA
         }
 
-        auto str{ std::format("memeory: {}\nstderr: {}\nsignal: {}\nexit_code: {}\nstdout: {}\ncpu_time_us: {}us\n", result.memory_kb, result.stderr, result.signal, result.exit_code, result.stdout, result.cpu_time_us) };
-        LOG_INFO("result:\n{}", str.c_str());
-
-        // 清理cgroup - 不再使用线程延迟清理
+        // 清理cgroup
         cleanupCgroup(cgroup_path);
     }
 
     void CppActuator::cleanupCgroup(const fs::path& cgroup_path)
     {
         try {
-            if (!fs::exists(cgroup_path)) return;
+            Exceptions::checkFileExists(cgroup_path);
             
             // 递归删除子cgroup
             std::vector<fs::path> subdirs;
@@ -438,7 +546,7 @@ USE sample DEFAULT KILL)KAFEL";
                 
                 if (errno == ENOTEMPTY) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    attempts++;
+                    ++attempts;
                 } else {
                     LOG_ERROR("rmdir failed: {} [{}]", strerror(errno), cgroup_path.string());
                     return;

@@ -23,11 +23,16 @@ namespace Judge
         }
     }
 
-    std::string toString(const TestResult &r)
+    std::string TestResult::toString() const
     {
-        std::string result{ std::format("[\n  Index: {}\n  Status: {}\n  Runtime: {} ms\n  Memory: {} KB\n  Exit Code: {}\n  Exit Signal: {}\n", r.index, toString(r.status), r.duration.count(), r.memory_kb, r.exit_code, r.signal) };
-        result.append("    Output: " + (r.stdout.size() > 10 ? r.stdout.substr(10) + "... \n" : r.stdout + "\n"));
-        result.append("    Stderr: " + (r.stderr.size() > 10 ? r.stderr.substr(10) + "... \n" : r.stderr + "\n"));
+        std::string result{ std::format("[\n  Status: {}\n  Runtime: {} us\n  Memory: {} KB\n  Exit Code: {}\n  Exit Signal: {}\n"
+            , Judge::toString(status)
+            , duration_us
+            , memory_kb
+            , exit_code
+            , signal) };
+        result.append("  Output: " + (stdout.size() > 10 ? stdout.substr(10) + "... \n" : stdout + "\n"));
+        result.append("  Stderr: " + (stderr.size() > 10 ? stderr.substr(10) + "... \n" : stderr + "\n"));
         result.append("]\n");
         return result;
     }
@@ -35,48 +40,30 @@ namespace Judge
     void Judge::TestResult::setResult(ExecutionResult &&er)
     {
         this->create_at = er.create_at;
-        this->duration = std::chrono::duration_cast<Millis>(er.finish_at - er.create_at);
         this->exit_at = er.finish_at;
         this->memory_kb = er.memory_kb;
         this->signal = er.signal;
         this->stdout = std::move(er.stdout);
         this->stderr = std::move(er.stderr);
         this->exit_code = er.exit_code;
+        this->duration_us = er.cpu_time_us;
         this->status = er.status;
-    }
-
-    JudgeResult::JudgeResult(std::string_view problem, SubID sub_id, size_t test_num)
-    : m_Problem{ problem }
-    , m_SubId{ sub_id }
-    , m_Results{ test_num }
-    {
-    }
-
-    bool JudgeResult::insertTestResult(TestResult &&test_result)
-    {
-        ++this->m_FinishedNum;
-        if (this->isCompleted()) {
-            this->m_FinishAt = std::chrono::steady_clock::now();
-            this->setStatus();
-        }
-        auto& test_slot = this->m_Results.at(test_result.index);
-        if (test_slot.status != TestStatus::UNKNOWN)
-            return false;
-        test_slot = std::move(test_result);
-        return true;
     }
 
     void JudgeResult::setStatus()
     {
+        if (this->results.empty()) {
+            this->m_Status = SubmissionStatus::CE;
+            return;
+        }
+
         StatusCode status_map = std::ranges::fold_left(
-            this->m_Results, 0, [](StatusCode status, const auto &task_result) -> StatusCode {
+            this->results, 0, [](StatusCode status, const auto &task_result) -> StatusCode {
             return status | static_cast<StatusCode>(task_result.status);
         });
 
         if (status_map == static_cast<StatusCode>(TestStatus::ACCEPTED)) {
             this->m_Status = SubmissionStatus::AC;
-        } else if (status_map == static_cast<StatusCode>(TestStatus::COMPILATION_ERROR)) {
-            this->m_Status = SubmissionStatus::CE;
         } else if (status_map & static_cast<StatusCode>(TestStatus::WRONG_ANSWER)) {
             this->m_Status = SubmissionStatus::WA;
         } else if (status_map & static_cast<StatusCode>(TestStatus::MEMORY_LIMIT_EXCEEDED)) {
@@ -92,16 +79,15 @@ namespace Judge
 
     std::string JudgeResult::toString() const
     {
-        std::string str{ std::format("Problem: {}\n", this->m_Problem)};
-        str.append("SubmissionId: " + boost::uuids::to_string(this->m_SubId) + "\n");
+        std::string str{ std::format("Problem: {}\n", this->problem)};
+        str.append("SubmissionId: " + boost::uuids::to_string(this->sub_id) + "\n");
         str.append("Status: " + Judge::toString(this->m_Status) + "\n");
-        str.append("Duration: " + std::to_string(std::chrono::duration_cast<Millis>(this->m_FinishAt - this->m_CreateAt).count()) + " ms\n");
-        str.append("Compile Message: " + this->m_CompileMsg + "\n");
+        str.append("Duration: " + std::to_string(std::chrono::duration_cast<Millis>(this->finishAt - this->createAt).count()) + " ms\n");
+        str.append("Compile Message: " + this->compile_msg + "\n");
         str.append("TestResults: ");
-        for (const auto &result: this->m_Results) {
-            str.append(Judge::toString(result) + "\n");
+        for (const auto &result: this->results) {
+            str.append(result.toString() + "\n");
         }
         return str;
-
     }
 }

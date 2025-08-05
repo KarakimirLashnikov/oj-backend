@@ -1,5 +1,7 @@
 #pragma once
 #include "Core.hpp"
+#include "actuators/CppActuator.hpp"
+#include "compilers/CppCompiler.hpp"
 
 namespace Judge::Language
 {
@@ -10,16 +12,9 @@ namespace Judge::Language
         PYTHON
     };
 
-    inline std::string getFileExtension(LangID id)
-    {
-        switch (id)
-        {
-        case LangID::CPP:
-            return ".cpp";
-        case LangID::PYTHON:
-            return ".py";
-        case LangID::UNKNOWN:
-        default: return "";
-        }
-    }
+    std::string getFileExtension(LangID id);
+
+    std::unique_ptr<Actuator> getActuator(LangID id);
+
+    std::unique_ptr<Compiler> getCompiler(LangID id);
 }

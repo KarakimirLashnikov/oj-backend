@@ -6,12 +6,15 @@ namespace Judge
     class CppActuator : public Actuator
     {
     public:
-        CppActuator() = default;
+        CppActuator();
         virtual ~CppActuator() noexcept = default;
 
         ExecutionResult execute(fs::path exe_path,
                                 const ResourceLimits &limits,
                                 std::string_view stdin_data = "") override;
+
+
+        static void initSystem();
 
     private:
         void joinCgroup(const fs::path& cgroup_path);

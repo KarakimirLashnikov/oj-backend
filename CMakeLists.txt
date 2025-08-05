@@ -8,6 +8,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/judge
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/exceptions
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/cpp-httplib
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/json/include
@@ -15,10 +16,11 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/kafel/include
 )
 
+add_subdirectory(app)
 add_subdirectory(core)
 add_subdirectory(judge)
+add_subdirectory(exceptions)
 add_subdirectory(third_party)
-add_subdirectory(app)
 
 add_executable(oj-backend)
 
@@ -42,6 +44,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/core/include
     ${CMAKE_CURRENT_SOURCE_DIR}/judge/include
     ${CMAKE_CURRENT_SOURCE_DIR}/app/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/exceptions/include
 )
 
 target_link_libraries(
@@ -51,4 +54,5 @@ target_link_libraries(
     CoreLayer 
     JudgeLayer
     AppLayer
+    ExceptionsLayer
 )

@@ -44,6 +44,6 @@ namespace Judge
         uint64_t cpu_time_us;
         TimeStamp create_at{};
         TimeStamp finish_at{};
-        TestStatus status = TestStatus::UNKNOWN;
+        TestStatus status{TestStatus::UNKNOWN};
     };
 }

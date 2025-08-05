@@ -33,7 +33,7 @@ namespace OJApp
     private:
         Application() = default;
 
-        void processSubmission(Judge::Submission&& sub, asio::io_context& ioc);
+        Judge::JudgeResult processSubmission(const Judge::Submission& sub, asio::io_context& ioc);
 
     private:
         struct Impl;

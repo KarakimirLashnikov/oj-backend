@@ -39,6 +39,7 @@ target_include_directories(
     JudgeLayer
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../core/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../exceptions/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/utilities
     ${CMAKE_CURRENT_SOURCE_DIR}/include/compilers

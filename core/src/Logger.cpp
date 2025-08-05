@@ -31,8 +31,7 @@ namespace Core
 
         if (!logFile.empty())
         {
-            if (logFile.find("..") != std::string::npos)
-            {
+            if (logFile.find("..") != std::string::npos) {
                 throw std::invalid_argument("Invalid log file path");
             }
             auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);

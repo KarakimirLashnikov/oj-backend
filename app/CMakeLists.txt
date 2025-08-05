@@ -21,5 +21,6 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../core/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../judge/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../exceptions/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/json/include
 )

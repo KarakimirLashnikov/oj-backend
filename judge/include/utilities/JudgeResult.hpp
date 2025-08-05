@@ -27,58 +27,34 @@ namespace Judge
         std::string stderr{};
         TimeStamp create_at{};
         TimeStamp exit_at{};
-        Millis duration{};
-        size_t index{};
-        int exit_code{};
+        uint64_t duration_us{0};
+        int exit_code{-1};
         int memory_kb{-1};
         int signal{-1};
-        TestStatus status{};
-
+        TestStatus status;
+        
         void setResult(ExecutionResult&& er);
+
+        [[nodiscard]] std::string toString() const;
     };
 
-    std::string toString(const TestResult& r);
 
-
-    class JudgeResult
+    struct JudgeResult
     {
     public:
-        JudgeResult(std::string_view problem, SubID sub_id, size_t test_num);
-        ~JudgeResult() = default;
-
-        bool insertTestResult(TestResult&& result);
-
-        inline JudgeResult& setCreateTime(TimeStamp create_time) { 
-            this->m_CreateAt = create_time;
-            return *this;
-        }
-
-        inline JudgeResult& setCompileMessage(std::string&& msg) {
-            this->m_CompileMsg = std::forward<std::string>(msg);
-            return *this;
-        }
-
-        inline bool isCompleted() const {
-            return m_Results.size() == m_FinishedNum;
-        }
-
-        inline SubmissionStatus getStatus() const {
-            return this->m_Status;
-        }
-
-        std::string toString() const;
-
-    private:
+        std::string problem{};
+        std::string compile_msg{};
+        std::vector<TestResult> results{};
+        TimeStamp createAt{};
+        TimeStamp finishAt{};
+        SubID sub_id{};
+        
         void setStatus();
+        
+        [[nodiscard]] SubmissionStatus status() const { return m_Status; }
 
+        [[nodiscard]] std::string toString() const;
     private:
-        std::string m_Problem;
-        std::string m_CompileMsg{};
-        std::vector<TestResult> m_Results;
-        TimeStamp m_CreateAt{};
-        TimeStamp m_FinishAt{};
-        SubID m_SubId{};
-        size_t m_FinishedNum{0};
         SubmissionStatus m_Status{ SubmissionStatus::UNKNOWN};
     };
 }
