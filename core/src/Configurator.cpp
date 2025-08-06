@@ -5,6 +5,7 @@ namespace Core
 {
     Configurator::Configurator(std::string_view conf_file_path)
     : m_ReaderPtr{ nullptr }
+    , m_ConfFilePath{ conf_file_path.data() }
     {
         Exceptions::checkFileExists(conf_file_path.data());
         Exceptions::checkFileReadable(conf_file_path.data());

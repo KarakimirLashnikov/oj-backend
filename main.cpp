@@ -2,7 +2,7 @@
 #include "api/submissions.hpp"
 using Core::Http::POST;
 
-using OJApp::API::dealSubmit;
+using OJApp::Submissions::submit;
 
 int main()
 {
@@ -10,7 +10,7 @@ int main()
     {
         App.init("config.ini");
 
-        App.registryRouter<POST>("/api/submit", &dealSubmit);
+        App.registryRouter<POST>("/api/submit", &submit);
     
         App.run("0.0.0.0", 8000);
     }

@@ -12,6 +12,8 @@ namespace Judge::Language
         PYTHON
     };
 
+    std::string getLanguage(LangID id);
+
     std::string getFileExtension(LangID id);
 
     std::unique_ptr<Actuator> getActuator(LangID id);

@@ -1,9 +1,13 @@
 #pragma once
 #include "Core.hpp"
-#include "Application.hpp"
+#include <httplib.h>
 
 
-namespace OJApp::API
+namespace OJApp::Submissions
 {
-    void dealSubmit(const httplib::Request& req, httplib::Response& res);
+    void submit(const httplib::Request& req, httplib::Response& res);
+
+    void querySubmissionStatus(const httplib::Request& req, httplib::Response& res);
+
+    void querySubmissionResult(const httplib::Request& req, httplib::Response& res);
 }

@@ -513,7 +513,7 @@ namespace Judge
         } else if (result.signal != 0 || result.exit_code != 0) {
             result.status = TestStatus::RUNTIME_ERROR;
         } else {
-            result.status = TestStatus::WRONG_ANSWER; // 未判定 , 默认 WA
+            result.status = TestStatus::UNKNOWN; // 未判定 , 默认
         }
 
         // 清理cgroup

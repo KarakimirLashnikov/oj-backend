@@ -1,22 +1,16 @@
 #pragma once
-#include <filesystem>
 #include <cpp/INIReader.h>
 #include "Core.hpp"
+#include "Types.hpp"
 
 namespace Core
 {
-    template <typename T>
-    concept IniSupportedType = std::is_integral_v<T> || 
-                            std::is_same_v<T, std::string> ||
-                            std::is_floating_point_v<T> ||
-                            std::is_same_v<T, bool>;
-
     class Configurator
     {
     public:
         Configurator(std::string_view conf_file_path = "config.ini");
 
-        template <IniSupportedType TValue>
+        template <Types::IniSupportedType TValue>
         TValue get(std::string_view section, std::string_view key, TValue default_value = {}) const
         {
             if constexpr (std::is_integral_v<TValue>) {
@@ -36,7 +30,10 @@ namespace Core
             }
         }
 
+        inline const fs::path &getConfFilePath() const noexcept { return m_ConfFilePath; }
+
     private:
         std::unique_ptr<INIReader> m_ReaderPtr;
+        fs::path m_ConfFilePath;
     };
 }

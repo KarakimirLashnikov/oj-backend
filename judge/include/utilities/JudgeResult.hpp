@@ -23,8 +23,6 @@ namespace Judge
 
     struct TestResult
     {
-        std::string stdout{};
-        std::string stderr{};
         TimeStamp create_at{};
         TimeStamp exit_at{};
         uint64_t duration_us{0};
@@ -33,7 +31,7 @@ namespace Judge
         int signal{-1};
         TestStatus status;
         
-        void setResult(ExecutionResult&& er);
+        TestResult(const ExecutionResult &er);
 
         [[nodiscard]] std::string toString() const;
     };
@@ -42,7 +40,7 @@ namespace Judge
     struct JudgeResult
     {
     public:
-        std::string problem{};
+        std::string problem_title{};
         std::string compile_msg{};
         std::vector<TestResult> results{};
         TimeStamp createAt{};

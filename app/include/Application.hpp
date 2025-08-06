@@ -2,7 +2,7 @@
 #include <httplib.h>
 #include "Logger.hpp"
 #include "Core.hpp"
-#include "HttpMethod.hpp"
+#include "Http.hpp"
 #include "utilities/Submission.hpp"
 
 namespace OJApp
@@ -29,7 +29,7 @@ namespace OJApp
 
         void init(std::string_view conf_file);
         void run(std::string_view host, uint16_t port);
-        void submit(Judge::Submission&& submission);
+        bool submit(Judge::Submission&& submission);
     private:
         Application() = default;
 

@@ -5,10 +5,12 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/judge
-    ${CMAKE_CURRENT_SOURCE_DIR}/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/app
-    ${CMAKE_CURRENT_SOURCE_DIR}/exceptions
+    ${CMAKE_CURRENT_SOURCE_DIR}/judge/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/exceptions/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/database/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/database/mysql-connector/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/cpp-httplib
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/json/include
@@ -20,6 +22,7 @@ add_subdirectory(app)
 add_subdirectory(core)
 add_subdirectory(judge)
 add_subdirectory(exceptions)
+add_subdirectory(database)
 add_subdirectory(third_party)
 
 add_executable(oj-backend)
@@ -45,11 +48,13 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/judge/include
     ${CMAKE_CURRENT_SOURCE_DIR}/app/include
     ${CMAKE_CURRENT_SOURCE_DIR}/exceptions/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/database/include
 )
 
 target_link_libraries(
     oj-backend 
-    PRIVATE 
+    PRIVATE
+    DatabaseLayer
     ThirdParty
     CoreLayer 
     JudgeLayer

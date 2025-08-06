@@ -10,7 +10,8 @@ namespace Judge
     using namespace Language;
     struct Submission
     {
-        std::string problem;
+        std::string user_name;
+        std::string problem_title;
         std::variant<std::monostate,
                      std::string, 
                      fs::path>

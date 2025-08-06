@@ -8,8 +8,21 @@ namespace Core::Types
     using SubID = boost::uuids::random_generator_pure::result_type;
     using StatusCode = std::uint8_t;
 
+    struct TestCase
+    {
+        std::string stdin;
+        std::string expected_output;
+        int sequence;
+        bool is_hidden = false;
+    };
+
     template <typename T>
-    using Queue = boost::lockfree::queue<T>;
+    concept IniSupportedType = std::is_integral_v<T> || 
+                            std::is_same_v<T, std::string> ||
+                            std::is_floating_point_v<T> ||
+                            std::is_same_v<T, bool>;
+
+    std::string timeStampToMySQLString(const TimeStamp& ts);
 }
 
 namespace bp = boost::process;

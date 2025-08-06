@@ -12,39 +12,34 @@ namespace Judge
         {
         case SubmissionStatus::UNKNOWN: return "UNKNOWN";
         case SubmissionStatus::PENDING: return "PENDING";
-        case SubmissionStatus::AC: return "AC";
-        case SubmissionStatus::WA: return "WA";
-        case SubmissionStatus::RE: return "RE";
-        case SubmissionStatus::MLE: return "MLE";
-        case SubmissionStatus::TLE: return "TLE";
-        case SubmissionStatus::IE: return "IE";
-        case SubmissionStatus::CE: return "CE";
+        case SubmissionStatus::AC: return "ACCEPT";
+        case SubmissionStatus::WA: return "WRONG_ANSWER";
+        case SubmissionStatus::RE: return "RUNTIME_ERROR";
+        case SubmissionStatus::MLE: return "MEMORY_LIMIT_EXCEEDED";
+        case SubmissionStatus::TLE: return "TIME_LIMIT_EXCEEDED";
+        case SubmissionStatus::IE: return "INTERNAL_ERROR";
+        case SubmissionStatus::CE: return "COMPILATION_ERROR";
         default: throw std::runtime_error("Undefined submission status.");
         }
     }
 
     std::string TestResult::toString() const
     {
-        std::string result{ std::format("[\n  Status: {}\n  Runtime: {} us\n  Memory: {} KB\n  Exit Code: {}\n  Exit Signal: {}\n"
+        std::string result{ std::format("[\n  Status: {}\n  Runtime: {} us\n  Memory: {} KB\n  Exit Code: {}\n  Exit Signal: {}\n]\n"
             , Judge::toString(status)
             , duration_us
             , memory_kb
             , exit_code
             , signal) };
-        result.append("  Output: " + (stdout.size() > 10 ? stdout.substr(10) + "... \n" : stdout + "\n"));
-        result.append("  Stderr: " + (stderr.size() > 10 ? stderr.substr(10) + "... \n" : stderr + "\n"));
-        result.append("]\n");
         return result;
     }
 
-    void Judge::TestResult::setResult(ExecutionResult &&er)
+    TestResult::TestResult(const ExecutionResult &er)
     {
         this->create_at = er.create_at;
         this->exit_at = er.finish_at;
         this->memory_kb = er.memory_kb;
         this->signal = er.signal;
-        this->stdout = std::move(er.stdout);
-        this->stderr = std::move(er.stderr);
         this->exit_code = er.exit_code;
         this->duration_us = er.cpu_time_us;
         this->status = er.status;
@@ -79,7 +74,7 @@ namespace Judge
 
     std::string JudgeResult::toString() const
     {
-        std::string str{ std::format("Problem: {}\n", this->problem)};
+        std::string str{ std::format("Problem: {}\n", this->problem_title)};
         str.append("SubmissionId: " + boost::uuids::to_string(this->sub_id) + "\n");
         str.append("Status: " + Judge::toString(this->m_Status) + "\n");
         str.append("Duration: " + std::to_string(std::chrono::duration_cast<Millis>(this->finishAt - this->createAt).count()) + " ms\n");

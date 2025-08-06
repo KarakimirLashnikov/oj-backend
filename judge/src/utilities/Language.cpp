@@ -2,6 +2,19 @@
 
 namespace Judge::Language
 {
+    std::string getLanguage(LangID id)
+    {
+        switch (id)
+        {
+        case LangID::CPP:
+            return "C++";
+        case LangID::PYTHON:
+            return "Python";
+        case LangID::UNKNOWN:
+        default: return "unknown";
+        }
+    }
+
     std::string getFileExtension(LangID id)
     {
         switch (id)

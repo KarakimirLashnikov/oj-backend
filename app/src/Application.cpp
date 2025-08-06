@@ -8,31 +8,36 @@
 #include "compilers/CppCompiler.hpp"
 #include "actuators/CppActuator.hpp"
 #include "FileException.hpp"
+#include "Queue.hpp"
+#include "judgedb/JudgeInquirer.hpp"
+#include "judgedb/JudgeWriter.hpp"
 
 namespace OJApp
 {
     std::unique_ptr<Application> Application::s_AppPtr{ nullptr };
 
-    using Core::Types::Queue;
+    using Core::Queue;
     struct Application::Impl
     {
         Queue<std::future<Judge::Submission>> m_FutureQueue;
         std::unique_ptr<Core::ThreadPool> m_JudgerPool;
         std::unique_ptr<std::thread> m_ErrorHandlerThread;
+        std::unique_ptr<Core::Configurator> m_Configurator{};
         fs::path m_SubmissionTempDir;
         std::atomic<bool> m_ShouldExit{ false };
 
         Impl() = default;
 
-        Impl(Core::Configurator& cfg)
+        Impl(std::string_view conf_file_path)
         : m_JudgerPool{ nullptr }
         , m_ErrorHandlerThread{ nullptr }
         , m_FutureQueue{}
         , m_SubmissionTempDir{}
+        , m_Configurator{ std::make_unique<Core::Configurator>(conf_file_path.data()) }
         {
-            size_t judger_num = cfg.get<int>("application", "JUDGER_NUMBER", std::thread::hardware_concurrency());
+            size_t judger_num = m_Configurator->get<int>("application", "JUDGER_NUMBER", std::thread::hardware_concurrency());
             m_JudgerPool = std::make_unique<Core::ThreadPool>(judger_num);
-            m_SubmissionTempDir = fs::path{ cfg.get<std::string>("application", "SUBMISSION_TEMP_DIR", "./submission_temp/" ) };
+            m_SubmissionTempDir = fs::path{ m_Configurator->get<std::string>("application", "SUBMISSION_TEMP_DIR", "./submission_temp/" ) };
             Exceptions::checkFileExists(m_SubmissionTempDir.c_str());
             Exceptions::checkFileWritable(m_SubmissionTempDir.c_str());
         }
@@ -51,9 +56,8 @@ namespace OJApp
     void Application::init(std::string_view conf_file)
     {
         Core::Logger::Init("oj-server", Core::Logger::Level::INFO, "logs/server.log");
-        Core::Configurator cfg{ conf_file };
         Judge::CppActuator::initSystem();
-        this->m_ImplPtr = std::make_unique<Impl>(cfg);
+        this->m_ImplPtr = std::make_unique<Impl>(conf_file);
         this->m_HttpServer = std::make_unique<httplib::Server>();
     }
 
@@ -63,20 +67,44 @@ namespace OJApp
             [this]() -> void {
                 while (!m_ImplPtr->m_ShouldExit) {
                     std::future<Judge::Submission> sub{};
-                    if (m_ImplPtr->m_FutureQueue.pop(sub)) {
+                    if (m_ImplPtr->m_FutureQueue.pop(sub, std::chrono::seconds(1))) {
                         Judge::Submission sub_copy{};
                         try {
                             sub_copy = sub.get();
-                            // 如果没有异常 , 删除用户临时代码目录
+                            // If no exception, remove user's temp code directory
                             fs::remove(std::get<fs::path>(sub_copy.uploade_code_file_path).parent_path());
                         } catch (const Exceptions::FileException& e) {
                             LOG_ERROR("{}\n", e.what());
-                            this->submit(std::move(sub_copy)); // try again
+                            JudgeDB::JudgeInquirer ji{
+                                m_ImplPtr->m_Configurator->get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                                m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PORT", "3306"),
+                                m_ImplPtr->m_Configurator->get<std::string>("judgedb", "USERNAME", "root"),
+                                m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PASSWORD", ""),
+                            };
+                            JudgeDB::JudgeWriter jw{
+                                m_ImplPtr->m_Configurator->get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                                m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PORT", "3306"),
+                                m_ImplPtr->m_Configurator->get<std::string>("judgedb", "USERNAME", "root"),
+                                m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PASSWORD", ""),
+                            };
+                            // 先查数据库提交有没有记录 , 如果有写入状态为 Internal Error
+                            // 如果没有则要从用户提交的临时文件夹写入提交 , 设置状态为 Internal Error
+                            if (!ji.isExists(sub_copy.submission_id)) {
+                                std::ifstream f{ std::get<fs::path>(sub_copy.uploade_code_file_path).string() };
+                                if (!f.is_open()) {
+                                    LOG_CRITICAL("Cannot read code from temporary directory. Submission id: {}.", boost::uuids::to_string(sub_copy.submission_id));
+                                    continue; // 无法再处理
+                                }
+                                std::stringstream code{};
+                                code << f.rdbuf();
+                                jw.createSubmission(sub_copy, code.str());
+                            }
+                            jw.updateSubmission(sub_copy.submission_id, Judge::SubmissionStatus::IE);
+                            // 删除临时文件夹
+                            fs::remove(std::get<fs::path>(sub_copy.uploade_code_file_path).parent_path());
                         } catch (const std::exception& e) {
                             LOG_ERROR("Unexpected exception in Judger Thread\n");
                         }
-                    } else {
-                        std::this_thread::sleep_for(std::chrono::seconds(1));
                     }
                 }
             }
@@ -89,37 +117,46 @@ namespace OJApp
 
     using namespace Judge::Language;
 
-    void Application::submit(Judge::Submission &&submission)
+    bool Application::submit(Judge::Submission &&submission)
     {
         auto file_extension{ getFileExtension(submission.language_id) };
         std::string source_path{ m_ImplPtr->m_SubmissionTempDir / (boost::uuids::to_string(submission.submission_id) + file_extension) };
         std::shared_ptr<asio::io_context> p_ioc{};
+        std::string code = std::move(std::get<std::string>(submission.uploade_code_file_path));
         try {
             Core::FileWriter writer{ *p_ioc };
-            writer.write(source_path.c_str(), std::get<std::string>(submission.uploade_code_file_path));
+            writer.write(source_path.c_str(), code);
         } catch (const std::exception &e) {
             LOG_ERROR("Write Code File Error");
+            return false;
         }
         submission.uploade_code_file_path = fs::path(source_path);
-        auto error{ m_ImplPtr->m_JudgerPool->enqueue([this, p_ioc, submission]() -> Judge::Submission {
-                    auto result = processSubmission(submission, *p_ioc);
-                    // TODO: Send Result Back to Client
-                    // TODO: Record Result To DB
-
-                    
+        auto error{ m_ImplPtr->m_JudgerPool->enqueue([this, p_ioc, submission, code]() -> Judge::Submission {
+                    // 1. 创建写入器
+                    JudgeDB::JudgeWriter jw{
+                        m_ImplPtr->m_Configurator->get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                        m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PORT", "3306"),
+                        m_ImplPtr->m_Configurator->get<std::string>("judgedb", "USERNAME", "root"),
+                        m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PASSWORD", ""),
+                    };
+                    // 2. 先写入提交
+                    jw.createSubmission(submission, code);
+                    // 2. 评测并返回结果
+                    auto result{ processSubmission(submission, *p_ioc) };
+                    // 3. 写入评测结果
+                    jw.writeJudgeResult(result);
+                    // 4. 更新提交状态
+                    jw.updateSubmission(result.sub_id, result.status());
                     return submission; // 如果出错 , 用来恢复
                 }
             )
         };
-        m_ImplPtr->m_FutureQueue.bounded_push(std::move(error));
+        m_ImplPtr->m_FutureQueue.push(std::move(error));
+        return true;
     }
     
     Judge::JudgeResult Application::processSubmission(const Judge::Submission& sub, asio::io_context& ioc)
     {
-        // 读数据库 ， 找测试用例 ， 但是先阻塞返回一个生成器 ，
-        // 如果编译失败可以直接返回
-        // 运行每个测试前才正真读取数据库测试用例
-
         Judge::JudgeResult result{};
 
         auto compiler{ getCompiler(sub.language_id) };
@@ -142,17 +179,33 @@ namespace OJApp
         } else {
             exe_path = source_path;
         }
+        // 1. 创建一个查询器
+        JudgeDB::JudgeInquirer ji{
+            m_ImplPtr->m_Configurator->get<std::string>("judgedb", "HOST", "127.0.0.1"),
+            m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PORT", "3306"),
+            m_ImplPtr->m_Configurator->get<std::string>("judgedb", "USERNAME", "root"),
+            m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PASSWORD", ""),
+        };
+        // 2. 从数据库读取题目限制
+        Judge::ResourceLimits limit{ ji.getProblemLimits(sub.problem_title) };
+        // 3. 从题目读取输入输出 , 但是阻塞返回一个生成器
+        auto generator{ ji.getTestCases(sub.problem_title) };
+        while (generator.next()) {
+            Core::Types::TestCase tc{ generator.getCurrentTestCase() };
+            Judge::ExecutionResult exe_result{actuator->execute(exe_path, limit, tc.stdin)};
+            if (exe_result.status == Judge::TestStatus::UNKNOWN) {
+                if (exe_result.stdout == tc.expected_output)
+                    exe_result.status = Judge::TestStatus::ACCEPTED;
+                else 
+                    exe_result.status = Judge::TestStatus::WRONG_ANSWER;
+            }
 
-        // 1. 从数据库读取题目限制
-        // 2. 从题目读取输入输出 , 但是阻塞返回一个生成器
-        /*
-        while (!gen.done()) {
-            auto [stdin, expect_output ] = gen();
-            auto test_result = actuator->execute;
-            检查是否超时 , 是否超内存 , 是否非0退出码 , 非0信号
-            通过检查则对比输出结果， 如果一致 ， 则继续 ， 不一致 ， 立刻退出
+            result.results.emplace_back(exe_result);
+            if (exe_result.status != Judge::TestStatus::ACCEPTED) 
+                break;
         }
-        */
+        result.setStatus();
+
         return result;
     }
 }

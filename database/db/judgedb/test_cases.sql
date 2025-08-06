@@ -1,0 +1,11 @@
+-- 测试用例表
+CREATE TABLE test_cases (
+    id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    problem_id INT UNSIGNED NOT NULL,   -- 关联的题目ID
+    stdin TEXT NOT NULL,                -- 测试用例输入
+    expected_output TEXT NOT NULL,      -- 期望输出
+    sequence INT NOT NULL,              -- 测试用例执行顺序
+    is_hidden BOOLEAN DEFAULT FALSE,    -- 是否为隐藏测试用例
+    FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE,
+    INDEX idx_problem_id (problem_id)   -- 索引加速查询
+);

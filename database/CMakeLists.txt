@@ -1,33 +1,51 @@
-include(ExternalProject)
-set(MYSQL_CONNECTOR_VERSION 8.4.5-0ubuntu0.2) # 填入正确的版本即可
-set(MYSQL_CONNECTOR_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/mysql)
-set(MYSQL_CONNECTOR_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/mysql-build)
-set(MYSQL_CONNECTOR_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/mysql-install)
-
-ExternalProject_Add(
-    mysql_connector_cpp 
-    URL "https://dev.mysql.com/get/Downloads/Connector-C++/mysql-connector-c++-${MYSQL_CONNECTOR_VERSION}-src.tar.gz" 
-    SOURCE_DIR "${MYSQL_CONNECTOR_SOURCE_DIR}"
-    BINARY_DIR "${MYSQL_CONNECTOR_BUILD_DIR}"
-    INSTALL_DIR "${MYSQL_CONNECTOR_INSTALL_DIR}"
-    CMAKE_ARGS 
-        -DCMAKE_INSTALL_
+# 查找 MySQL Connector/C++ 头文件路径
+find_path(MYSQLCPPCONN_INCLUDE_DIR NAMES mysql_connection.h PATHS
+    /usr/include/mysql
 )
 
+# 查找 MySQL Connector/C++ 库文件
+find_library(MYSQLCPPCONN_LIBRARY NAMES mysqlcppconn PATHS
+    /usr/lib/x86_64-linux-gnu
+)
+
+if(MYSQLCPPCONN_INCLUDE_DIR AND MYSQLCPPCONN_LIBRARY)
+    message(STATUS "Found MySQL Connector/C++: ${MYSQLCPPCONN_LIBRARY}")
+    add_library(mysqlcppconn INTERFACE IMPORTED)
+    target_include_directories(mysqlcppconn INTERFACE ${MYSQLCPPCONN_INCLUDE_DIR})
+    target_link_libraries(mysqlcppconn INTERFACE ${MYSQLCPPCONN_LIBRARY})
+else()
+    message(FATAL_ERROR "MySQL Connector/C++ not found!")
+endif()
+
+
+set(db_sources_root ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(db_sources_header ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 file(
     GLOB 
     database_sources
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    ${db_sources_root}/judgedb/*.cpp
 )
 
 add_library( 
-    database
+    DatabaseLayer
 )
 
 target_sources(
-    database
+    DatabaseLayer
     PRIVATE 
     ${database_sources}
 )
 
+target_include_directories(
+    DatabaseLayer
+    PRIVATE 
+    ${db_sources_header}
+    ${MYSQL_CONCPP_DIR}/include
+)
+
+target_link_libraries(
+    DatabaseLayer 
+    PRIVATE  
+    mysqlcppconn
+)

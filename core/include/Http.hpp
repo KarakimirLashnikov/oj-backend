@@ -24,4 +24,11 @@ namespace Core::Http
                          std::is_same_v<TMethod, OPTIONS> ||
                          std::is_same_v<TMethod, TRACE> ||
                          std::is_same_v<TMethod, CONNECT>;
+
+    enum ResponseStatusCode
+    {
+        OK = 200,
+        Bad_Request = 400,
+        Internal_Server_Error = 500,
+    };
 }
