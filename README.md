@@ -1,81 +1,162 @@
-1. cd third_party
-2. git clone git@github.com:yhirose/cpp-httplib.git
-3. git clone git@github.com:nlohmann/json.git
-4. git clone git@github.com:gabime/spdlog.git
-5. sudo apt install libboost-all-dev
-6. sudo apt install libseccomp-dev libseccomp2 seccomp
-7. git clone git@github.com:google/kafel.git
-8. cd kafel 创建 CMakeLists.txt 写入
-```CMakeLists.txt
-cmake_minimum_required(VERSION 3.13)
-project(kafel C)
+我将优化文档以提高可读性和实用性，主要改进配置步骤的清晰度和API文档的完整性：
 
-# 设置编译选项
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_VISIBILITY_PRESET hidden)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+### 优化后的README.md
 
-# 查找依赖工具
-find_package(FLEX REQUIRED)
-find_package(BISON REQUIRED)
-find_program(OBJCOPY NAMES objcopy)
-find_program(OBJDUMP NAMES objdump)
+```markdown
+## 环境配置
+### 依赖库安装
+```bash
+# 克隆第三方库
+cd third_party
+git clone git@github.com:yhirose/cpp-httplib.git
+git clone git@github.com:nlohmann/json.git
+git clone git@github.com:gabime/spdlog.git
 
-# 生成的源文件
-set(GENERATED_SRCS
-    ${CMAKE_CURRENT_BINARY_DIR}/lexer.c
-    ${CMAKE_CURRENT_BINARY_DIR}/parser.c
-)
-
-# 源文件列表
-set(SRCS
-    src/kafel.c
-    src/context.c
-    src/codegen.c
-    src/expression.c
-    src/includes.c
-    src/parser_types.c
-    src/policy.c
-    src/range_rules.c
-    src/syscall.c
-    src/syscalls/amd64_syscalls.c
-    src/syscalls/i386_syscalls.c
-    src/syscalls/aarch64_syscalls.c
-    src/syscalls/mipso32_syscalls.c
-    src/syscalls/mips64_syscalls.c
-    src/syscalls/arm_syscalls.c
-    src/syscalls/riscv64_syscalls.c
-    ${GENERATED_SRCS}
-)
-
-# 使用绝对路径引用源文件
-add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lexer.c ${CMAKE_CURRENT_BINARY_DIR}/lexer.h
-    COMMAND ${FLEX_EXECUTABLE} --header-file=${CMAKE_CURRENT_BINARY_DIR}/lexer.h -o ${CMAKE_CURRENT_BINARY_DIR}/lexer.c ${CMAKE_CURRENT_SOURCE_DIR}/src/lexer.l
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/lexer.l
-    COMMENT "Generating lexer"
-)
-
-add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/parser.c ${CMAKE_CURRENT_BINARY_DIR}/parser.h
-    COMMAND ${BISON_EXECUTABLE} -d -o ${CMAKE_CURRENT_BINARY_DIR}/parser.c ${CMAKE_CURRENT_SOURCE_DIR}/src/parser.y
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/parser.y
-    COMMENT "Generating parser"
-)
-
-# 禁用生成代码的警告
-set_source_files_properties(${GENERATED_SRCS} PROPERTIES COMPILE_FLAGS "-Wno-error")
-
-# 包含目录
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_BINARY_DIR}
-)
-
-add_library(kafel_static STATIC ${SRCS})
-set_target_properties(kafel_static PROPERTIES OUTPUT_NAME kafel)
+# 安装系统依赖
+sudo apt update
+sudo apt install -y \
+  libboost-all-dev \
+  libseccomp-dev libseccomp2 seccomp \
+  flex bison \
+  mysql-server libmysqlclient-dev \
+  libmysqlcppconn-dev \
+  libsodium-dev
 ```
-9. sudo apt-get install flex bison
-10. sudo apt-get install mysql-server libmysqlclient-dev
-11. sudo apt-get install libmysqlcppconn-dev 注意路径，修改[CMakeLists.txt](./database/CMakeLists.txt)
- 
+
+### MySQL配置说明
+ 安装后需修改数据库配置[CMakeLists](./database/CMakeLists.txt)：
+```cmake
+# 检查并更新 MySQL Connector/C++ 相关路径:
+# 1. 查找 MySQL Connector/C++ 头文件路径
+find_path(MYSQLCPPCONN_INCLUDE_DIR NAMES mysql_connection.h PATHS
+    /usr/include/mysql
+)
+
+# 2. 查找 MySQL Connector/C++ 库文件
+find_library(MYSQLCPPCONN_LIBRARY NAMES mysqlcppconn PATHS
+    /usr/lib/x86_64-linux-gnu
+)
+```
+
+---
+
+## API 文档
+### 1. 提交管理 `/submissions`
+#### 提交代码
+**Endpoint**  
+`POST {base_url}/api/submissions/submit`
+
+**请求参数**  
+| 字段          | 类型     | 必填 | 说明                     |
+|---------------|----------|------|--------------------------|
+| user_name     | string   | ✓    | 用户名                   |
+| problem_title | string   | ✓    | 题目名称（需已存在）     |
+| source_code   | string   | ✓    | 源代码                   |
+| language_id   | string   | ✓    | 语言ID（当前仅支持1: C++）|
+| compile_options| array    | ✗    | 编译选项数组             |
+
+**响应示例**  
+```json
+// 成功 (HTTP 200)
+{
+  "status": "success",
+  "message": "Submission received",
+  "submission_id": "<KEY>" // boost::uuid::to_string, length == 36
+}
+
+// 失败 (HTTP 400)
+{
+  "status": "failure",
+  "message": "Problem not found"
+}
+```
+
+---
+
+### 2. 用户认证 `/login`
+#### 用户登录
+**Endpoint**  
+`POST {base_url}/api/login/login`
+
+**请求参数**  
+| 字段      | 类型   | 必填 | 说明         |
+|-----------|--------|------|--------------|
+| user_name | string | ✓    | 用户名       |
+| password  | string | ✓    | 密码         |
+
+**响应**  
+```json
+// 成功
+{"status": "success", "message": "Login successful"}
+
+// 失败
+{"status": "failure", "message": "Invalid credentials"}
+```
+
+#### 用户注册
+**Endpoint**  
+`POST {base_url}/api/login/signup`
+
+**请求参数**  
+| 字段      | 类型   | 必填 | 约束          |
+|-----------|--------|------|---------------|
+| user_name | string | ✓    | 唯一用户名    |
+| password  | string | ✓    | 密码          |
+| email     | string | ✓    | 有效邮箱格式  |
+
+**响应**  
+```json
+{"status": "success", "message": "User created"}
+```
+
+---
+
+### 3. 题目管理 `/problems`
+#### 创建题目
+**Endpoint**  
+`POST {base_url}/api/problems/create`
+
+**请求参数**  
+| 字段            | 类型    | 必填 | 约束                     |
+|-----------------|---------|------|--------------------------|
+| title           | string  | ✓    | 标题长度 < 128字符       |
+| time_limit_s    | float   | ✓    | 时间限制(秒)             |
+| memory_limit_kb | integer | ✓    | 内存限制(KB)             |
+| stack_limit_kb  | integer | ✓    | 栈限制(KB)               |
+| difficulty      | integer | ✓    | 难度等级(1-5)            |
+| description     | string  | ✓    | 题目描述                 |
+
+**响应**  
+```json
+{"status": "success", "message": "Problem created"}
+```
+
+#### 更新题目
+**Endpoint**  
+`POST {base_url}/api/problems/update`  
+*参数同创建接口，需确保题目已存在*
+
+#### 上传测试用例
+**Endpoint**  
+`POST {base_url}/api/problems/upload_test_cases`
+
+**请求参数**  
+| 字段          | 类型  | 必填 | 说明                          |
+|---------------|-------|------|-------------------------------|
+| problem_title | string| ✓    | 关联的题目名称                |
+| test_cases    | array | ✓    | 测试用例数组                  |
+
+**测试用例结构**  
+```json
+{
+  "stdin": "输入数据",
+  "expected_stdout": "预期输出",
+  "sequence": 排序标识,  // 使用整数序列
+  "is_hidden": true      // 可选，是否隐藏用例
+}
+```
+
+**响应**  
+```json
+{"status": "success", "message": "Test cases added"}
+```

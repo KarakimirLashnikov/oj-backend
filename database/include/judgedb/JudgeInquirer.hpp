@@ -1,5 +1,5 @@
 #pragma once
-#include <mysql_connection.h>
+#include "MySQLDB.hpp"
 #include "Core.hpp"
 #include "Types.hpp"
 #include "utilities/ResourceLimits.hpp"
@@ -51,29 +51,19 @@ namespace JudgeDB
 
     using Core::Types::SubID;
 
-    class JudgeInquirer
+    class JudgeInquirer : public MySQLDB::Database
     {
     public:
         JudgeInquirer(std::string_view host
                     , std::string_view user
                     , std::string_view password
                     , std::string_view database);
-        ~JudgeInquirer();
+        virtual ~JudgeInquirer() = default;
 
         bool isExists(SubID submission_id);
 
         Judge::ResourceLimits getProblemLimits(std::string_view problem_title);
 
         TestCasesGenerator getTestCases(std::string_view problem_title);
-
-    private:
-        void connect();
-
-    private:
-        std::unique_ptr<sql::Connection> m_Conn;
-        std::string m_Host;
-        std::string m_User;
-        std::string m_Password;
-        std::string m_Database;
     };
 }

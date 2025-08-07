@@ -38,8 +38,8 @@ namespace OJApp
             size_t judger_num = m_Configurator->get<int>("application", "JUDGER_NUMBER", std::thread::hardware_concurrency());
             m_JudgerPool = std::make_unique<Core::ThreadPool>(judger_num);
             m_SubmissionTempDir = fs::path{ m_Configurator->get<std::string>("application", "SUBMISSION_TEMP_DIR", "./submission_temp/" ) };
-            Exceptions::checkFileExists(m_SubmissionTempDir.c_str());
-            Exceptions::checkFileWritable(m_SubmissionTempDir.c_str());
+            if (!fs::is_directory(m_SubmissionTempDir))
+                fs::create_directories(m_SubmissionTempDir);
         }
 
         ~Impl() = default;
@@ -56,9 +56,9 @@ namespace OJApp
     void Application::init(std::string_view conf_file)
     {
         Core::Logger::Init("oj-server", Core::Logger::Level::INFO, "logs/server.log");
-        Judge::CppActuator::initSystem();
         this->m_ImplPtr = std::make_unique<Impl>(conf_file);
         this->m_HttpServer = std::make_unique<httplib::Server>();
+        Judge::CppActuator::initSystem(this->getConfigurator());
     }
 
     void Application::run(std::string_view host, uint16_t port)
@@ -207,5 +207,25 @@ namespace OJApp
         result.setStatus();
 
         return result;
+    }
+
+    bool Application::uploadTestCases(std::vector<TestCase>&& test_cases, std::string_view problem_title)
+    {
+        m_ImplPtr->m_JudgerPool->enqueue(
+            [this, test_cases = std::move(test_cases), title = std::string(problem_title)](){
+                JudgeDB::JudgeWriter writer{
+                    m_ImplPtr->m_Configurator->get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                    m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PORT", "3306"),
+                    m_ImplPtr->m_Configurator->get<std::string>("judgedb", "USERNAME", "root"),
+                    m_ImplPtr->m_Configurator->get<std::string>("judgedb", "PASSWORD", ""),
+                };
+                writer.insertTestCases(test_cases, title);
+            }
+        );
+        return true;
+    }
+
+    Core::Configurator& Application::getConfigurator() {
+        return *(m_ImplPtr->m_Configurator);
     }
 }

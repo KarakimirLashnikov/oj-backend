@@ -1,0 +1,53 @@
+#define STDIN 0
+#define STDOUT 1
+#define STDERR 2
+#define O_RDONLY 0
+#define PROT_EXEC 4
+#define PROT_READ 1
+#define PROT_WRITE 2
+#define F_SETFL 4
+#define F_SETOWN 8
+
+DEFAULT KILL
+
+POLICY judge_restrictions {
+  ALLOW {
+    mmap { (prot & PROT_EXEC) == 0 },
+    munmap,
+    brk,
+    mprotect { (prot & PROT_EXEC) == 0 },
+    
+    read { fd == STDIN },
+    write { fd == STDOUT || fd == STDERR },
+    close,
+    open { flags == O_RDONLY },
+    openat { flags == O_RDONLY },
+    newfstat,
+    fcntl { cmd == F_SETFL || cmd == F_SETOWN },
+    
+    getpid,
+    getppid,
+    getuid,
+    getgid,
+    geteuid,
+    getegid,
+    arch_prctl,
+    
+    clock_gettime,
+    gettimeofday,
+    time,
+    clock_nanosleep,
+    nanosleep,
+    
+    rt_sigaction,
+    rt_sigreturn,
+    
+    futex,
+    set_robust_list,
+    
+    exit,
+    exit_group
+  }
+}
+
+USE judge_restrictions

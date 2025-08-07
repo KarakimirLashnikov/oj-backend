@@ -4,6 +4,13 @@ project(OJ-BACKEND VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/config/config.ini" 
+     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}"
+)
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/config/kafel.policy" 
+     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/judge/include
     ${CMAKE_CURRENT_SOURCE_DIR}/core/include

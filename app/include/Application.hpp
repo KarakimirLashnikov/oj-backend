@@ -1,12 +1,15 @@
 #pragma once
 #include <httplib.h>
 #include "Logger.hpp"
+#include "Configurator.hpp"
 #include "Core.hpp"
 #include "Http.hpp"
 #include "utilities/Submission.hpp"
+#include "Types.hpp"
 
 namespace OJApp
 {
+    using Core::Types::TestCase;
 
     class Application
     {
@@ -30,6 +33,9 @@ namespace OJApp
         void init(std::string_view conf_file);
         void run(std::string_view host, uint16_t port);
         bool submit(Judge::Submission&& submission);
+        bool uploadTestCases(std::vector<TestCase>&& test_cases, std::string_view problem_title);
+
+        Core::Configurator& getConfigurator();
     private:
         Application() = default;
 

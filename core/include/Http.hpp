@@ -28,7 +28,7 @@ namespace Core::Http
     enum ResponseStatusCode
     {
         OK = 200,
-        Bad_Request = 400,
-        Internal_Server_Error = 500,
+        BadRequest = 400,
+        InternalServerError = 500,
     };
 }

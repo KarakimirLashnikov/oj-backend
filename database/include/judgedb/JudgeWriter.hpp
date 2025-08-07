@@ -1,8 +1,5 @@
 #pragma once
-
-#include <cppconn/connection.h>
-#include <cppconn/prepared_statement.h>
-#include <memory>
+#include "MySQLDB.hpp"
 #include "Core.hpp"
 #include "Types.hpp"
 #include "utilities/JudgeResult.hpp"
@@ -12,14 +9,15 @@
 namespace JudgeDB
 {
     using Core::Types::SubID;
-    class JudgeWriter
+    using Core::Types::TestCase;
+    class JudgeWriter : public MySQLDB::Database
     {
     public:
         explicit JudgeWriter(std::string_view host
                             , std::string_view user
                             , std::string_view password
                             , std::string_view database);
-        ~JudgeWriter();
+        virtual ~JudgeWriter() = default;
 
         void createSubmission(const Judge::Submission& submission, const std::string& source_code);
 
@@ -27,14 +25,6 @@ namespace JudgeDB
 
         void updateSubmission(SubID sub_id, Judge::SubmissionStatus status);
 
-    private:
-        std::unique_ptr<sql::Connection> m_Conn;
-        std::string m_Host;
-        std::string m_User;
-        std::string m_Password;
-        std::string m_Database;
-
-        void connect();
+        void insertTestCases(const std::vector<TestCase>& test_cases, std::string_view problem_title);
     };
-
 }

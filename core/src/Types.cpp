@@ -30,4 +30,17 @@ namespace Core::Types
         ss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
         return ss.str();
     }
+
+    std::string difficultyToString(DifficultyLevel difficulty)
+    {
+        switch (difficulty)
+        {
+        case DifficultyLevel::Beginner: return "Beginner";
+        case DifficultyLevel::Basic: return "Basic";
+        case DifficultyLevel::Intermediate: return "Intermediate";
+        case DifficultyLevel::Advanced: return "Advanced";
+        case DifficultyLevel::Expert: return "Expert";
+        default: throw std::out_of_range{"unexpected difficulty level"};
+        }
+    }
 }

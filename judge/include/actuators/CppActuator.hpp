@@ -1,5 +1,6 @@
 #pragma once
 #include "actuators/Actuator.hpp"
+#include "Configurator.hpp"
 
 namespace Judge
 {
@@ -14,7 +15,7 @@ namespace Judge
                                 std::string_view stdin_data = "") override;
 
 
-        static void initSystem();
+        static void initSystem(Core::Configurator& cfg);
 
     private:
         void joinCgroup(const fs::path& cgroup_path);

@@ -16,111 +16,6 @@
 #include <cstdio>
 #include <cstring>
 
-constexpr static const char* KAFEL_POLICY { R"KAFEL(
-    POLICY oj_sandbox {
-        // ==================== 允许的系统调用 ====================
-        ALLOW {
-            // 基本 I/O ( 仅允许 stdin/stdout/stderr )
-            read {
-                fd == 0  // stdin
-            }
-            write {
-                fd == 1 || fd == 2  // stdout/stderr
-            }
-            close {
-                fd == 0 || fd == 1 || fd == 2  // 允许关闭标准流
-            }
-
-            // 内存管理（允许基本的堆栈操作）
-            brk,
-            mmap {
-                prot == PROT_READ | PROT_WRITE,
-                flags == MAP_PRIVATE | MAP_ANONYMOUS
-            },
-            munmap,
-            mprotect {
-                prot == PROT_READ | PROT_WRITE | PROT_EXEC
-            }
-
-            // 基本进程控制（仅允许正常退出）
-            exit,
-            exit_group,
-            rt_sigreturn,
-
-            // 时间测量（允许获取运行时间）
-            clock_gettime,
-            gettimeofday,
-
-            // 架构相关(x86_64 常见调用)
-            arch_prctl,
-            set_tid_address,
-            futex {
-                // 仅允许 FUTEX_WAIT 和 FUTEX_WAKE(防止滥用)
-                op == FUTEX_WAIT || op == FUTEX_WAKE
-            }
-        }
-
-        // ==================== 拒绝的危险系统调用 ====================
-        DENY {
-            // 文件系统(禁止所有文件访问)
-            open,
-            openat,
-            creat,
-            unlink,
-            mkdir,
-            rmdir,
-            chmod,
-            chown,
-            rename,
-            symlink,
-            readlink,
-            stat,
-            lstat,
-            fstat,
-
-            // 网络(禁止所有网络访问)
-            socket,
-            connect,
-            bind,
-            listen,
-            accept,
-            sendto,
-            recvfrom,
-            sendmsg,
-            recvmsg,
-            shutdown,
-
-            // 进程控制(禁止 fork/exec)
-            fork,
-            vfork,
-            clone,
-            execve,
-            kill,
-            tkill,
-            tgkill,
-
-            // 系统信息（禁止获取敏感信息）
-            getpid,
-            getppid,
-            getuid,
-            getgid,
-            geteuid,
-            getegid,
-            getrandom,
-            sysinfo,
-
-            // 其他危险调用
-            ptrace,
-            prctl,
-            seccomp,
-            ioctl  // 禁止设备控制
-        }
-    }
-
-    // 应用策略，默认拒绝并终止进程
-    USE oj_sandbox DEFAULT KILL
-)KAFEL" };
-
 static std::once_flag ONCE_FLAG{};
 static sock_fprog SHARED_SECCOMP{};
 static bool IS_SYSTEM_INITIALIZED { false };
@@ -128,9 +23,9 @@ constexpr static const char *CGROUP_ROOT{ "/sys/fs/cgroup" };
 
 namespace Judge
 {
-    void CppActuator::initSystem()
+    void CppActuator::initSystem(Core::Configurator& cfg)
     {
-        std::call_once(::ONCE_FLAG, [](){  
+        std::call_once(::ONCE_FLAG, [&](){  
             // 1. 检查/proc目录
             Exceptions::checkFileExists("/proc");
             Exceptions::checkFileWritable("/proc");
@@ -138,14 +33,39 @@ namespace Judge
             // 2. 检查cgroup根目录
             Exceptions::checkFileExists(::CGROUP_ROOT);
             Exceptions::checkFileWritable(::CGROUP_ROOT);
-            
-            // 3. 编译Kafel策略
+
+            fs::path kafel_file_path{ cfg.get<std::string>("kafel", "KAFEL_POLICY_FILE", "./kafel.policy") };
+            Exceptions::checkFileExists(kafel_file_path);
+            Exceptions::checkFileReadable(kafel_file_path);
+            std::ifstream f{ kafel_file_path };
+            if (!f) {
+                throw Exceptions::makeSystemException("kafel policy file " + kafel_file_path.string() + " open failed", __FILE__, __LINE__);
+            }
+            std::string kafel_policy{ std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>() };
+
             kafel_ctxt_t ctxt = kafel_ctxt_create();
-            kafel_set_input_string(ctxt, ::KAFEL_POLICY);
-            if (kafel_compile(ctxt, &::SHARED_SECCOMP) != 0) {
-                const char* error_msg = kafel_error_msg(ctxt);
+            kafel_set_input_string(ctxt, kafel_policy.c_str());
+            
+            int compile_result = kafel_compile(ctxt, &::SHARED_SECCOMP);
+            if (compile_result != 0) {
+                // 安全地获取错误信息
+                const char* error_ptr = kafel_error_msg(ctxt);
+                std::string error_msg = error_ptr ? error_ptr : "unknown error";
+                
+                // 记录原始错误信息
+                LOG_ERROR("Kafel compile failed: {}", error_msg);
+                
+                // 转换为十六进制以便诊断
+                std::string hex_dump;
+                for (const char* p = error_ptr; *p; ++p) {
+                    char buf[5];
+                    snprintf(buf, sizeof(buf), "%02X ", static_cast<unsigned char>(*p));
+                    hex_dump += buf;
+                }
+                LOG_ERROR("error info(hex): {}", hex_dump);
+                
                 kafel_ctxt_destroy(&ctxt);
-                throw Exceptions::SystemException(-1, error_msg);
+                throw Exceptions::SystemException(compile_result, "Kafel compile failed, error_msg: " + error_msg, __FILE__, __LINE__);
             }
             kafel_ctxt_destroy(&ctxt);
             
@@ -165,10 +85,10 @@ namespace Judge
     CppActuator::CppActuator()
     {
         if (!IS_SYSTEM_INITIALIZED) 
-            throw Exceptions::SystemException(-1, "system not initialized");
+            throw Exceptions::SystemException(-1, "system not initialized", __FILE__, __LINE__);
 
         if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
-            throw Exceptions::SystemException(errno, "prctl(PR_SET_NO_NEW_PRIVS)");
+            throw Exceptions::SystemException(errno, "prctl(PR_SET_NO_NEW_PRIVS)", __FILE__, __LINE__);
         }
     }
 
@@ -178,7 +98,7 @@ namespace Judge
         Exceptions::checkFileWritable(cgroup_path);
         std::ofstream procs_file(cgroup_path / "cgroup.procs");
         if (!procs_file) {
-            throw Exceptions::makeSystemException("Open cgroup.procs in CppActuator::joinCgroup");
+            throw Exceptions::makeSystemException("Open cgroup.procs in CppActuator::joinCgroup", __FILE__, __LINE__);
         }
         procs_file << getpid() << std::endl;
     }
@@ -190,15 +110,15 @@ namespace Judge
 
         // 使用匿名管道 , 0 为父端， 1 为子端
         int stdout_pipe[2], stderr_pipe[2], stdin_pipe[2];
-        if (pipe(stdout_pipe)) throw Exceptions::SystemException(errno, "pipe stdout failed");
-        if (pipe(stderr_pipe)) throw Exceptions::SystemException(errno, "pipe stderr failed");
-        if (pipe(stdin_pipe)) throw Exceptions::SystemException(errno, "pipe stdin failed");
+        if (pipe(stdout_pipe)) throw Exceptions::SystemException(errno, "pipe stdout failed", __FILE__, __LINE__);
+        if (pipe(stderr_pipe)) throw Exceptions::SystemException(errno, "pipe stderr failed", __FILE__, __LINE__);
+        if (pipe(stdin_pipe)) throw Exceptions::SystemException(errno, "pipe stdin failed", __FILE__, __LINE__);
 
         auto start_time{ std::chrono::steady_clock::now() };
         
         pid_t child_pid{ fork() };
         if (child_pid < 0) {
-            throw Exceptions::SystemException(errno, "fork failed");
+            throw Exceptions::SystemException(errno, "fork failed", __FILE__, __LINE__);
         }
         else if (child_pid == 0) {
             // 子进程逻辑
@@ -224,7 +144,8 @@ namespace Judge
                     close(stdout_pipe[0]);
                     close(stderr_pipe[0]);
                     throw Exceptions::makeSystemException(
-                        "write to child's stdin failed in CppActuator::execute: " + std::string(strerror(errno)));
+                        "write to child's stdin failed in CppActuator::execute: " + std::string(strerror(errno))
+                        , __FILE__, __LINE__);
                 }
                 total_written += written;
             }

@@ -24,6 +24,7 @@ set(db_sources_header ${CMAKE_CURRENT_SOURCE_DIR}/include)
 file(
     GLOB 
     database_sources
+    ${db_sources_root}/*.cpp
     ${db_sources_root}/judgedb/*.cpp
 )
 

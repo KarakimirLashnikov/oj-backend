@@ -99,9 +99,23 @@ namespace Exceptions
         return FileException(type, path, message, err);
     }
 
+    static constexpr std::array<const char*, 2> SPECIAL_PATHS = {"/proc", "/sys"};
+
+    static bool isSpecialPath(const std::string& path) {
+        for (const auto& sp : SPECIAL_PATHS) {
+            if (path.find(sp) == 0) return true;
+        }
+        return false;
+    }
+
     void checkFileReadable(const std::string &path)
     {
         checkFileExists(path);
+
+        // root用户无需检查权限
+        if (geteuid() == 0 && isSpecialPath(path)) {
+            return; // 跳过特殊路径检查
+        }
 
         std::error_code ec;
         fs::file_status status = fs::status(path, ec);
@@ -126,8 +140,12 @@ namespace Exceptions
 
         // 文件不存在时跳过权限检查（允许创建）
         if (ec && ec.value() != ENOENT) {
-            throw FileException(FileException::ErrorType::UnknownError, path,
+            throw FileException(FileException::ErrorType::FileNotFound, path,
                                 "Failed to check file status", ec.value());
+        }
+
+        if (geteuid() == 0 && isSpecialPath(path)) {
+            return; // 跳过特殊路径检查
         }
 
         // 如果路径存在（文件或目录），检查写权限
@@ -144,6 +162,11 @@ namespace Exceptions
     {
         try {
             checkFileExists(path);
+
+            // root用户可以执行所有文件
+            if (geteuid() == 0 && isSpecialPath(path)) {
+                return; // 跳过特殊路径检查
+            }
 
             // 如果是目录，检查执行权限（可进入目录）
             if (fs::is_directory(path)) {
@@ -193,6 +216,10 @@ namespace Exceptions
     void checkFileAccessible(const std::string &path, int mode)
     {
         checkFileExists(path);
+        // root 用户无需权限检查
+        if (geteuid() == 0 && isSpecialPath(path)) {
+            return; // 跳过特殊路径检查
+        }
         
         if (access(path.c_str(), mode) != 0) {
             std::string operation;

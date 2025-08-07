@@ -1,42 +1,17 @@
-#include <cppconn/driver.h>
-#include <cppconn/exception.h>
+#include <cppconn/prepared_statement.h>
 #include <cppconn/resultset.h>
-#include <cppconn/statement.h>
-#include <mysql_connection.h>
-#include <mysql_driver.h>
 #include "judgedb/JudgeWriter.hpp"
-#include "judgedb/JudgeWriter.hpp"
+#include "Logger.hpp"
 
 namespace JudgeDB
 {
-    void JudgeWriter::connect() {
-        sql::Driver* driver = sql::mysql::get_driver_instance();
-        sql::ConnectOptionsMap options;
-        options["hostName"] = m_Host;
-        options["userName"] = m_User;
-        options["password"] = m_Password;
-        options["schema"] = m_Database;
-        m_Conn.reset(driver->connect(options));
-    }
 
     JudgeDB::JudgeWriter::JudgeWriter(std::string_view host
         , std::string_view user
         , std::string_view password
         , std::string_view database)
-        : m_Conn{ nullptr }
-        , m_Host{ host.data() }
-        , m_User{ user.data() }
-        , m_Password{ password.data() }
-        , m_Database{ database.data() }
+        : MySQLDB::Database{ host, user, password, database }
     {
-    }
-
-    JudgeWriter::~JudgeWriter()
-    {
-        if (m_Conn) {
-            m_Conn->close();
-            m_Conn.reset();
-        }
     }
     
     using Judge::Language::getLanguage;
@@ -44,7 +19,7 @@ namespace JudgeDB
     {
         try {
             std::unique_ptr<sql::PreparedStatement> pstmt (
-                m_Conn->prepareStatement(
+                m_ConnPtr->prepareStatement(
 R"SQL(SELECT id
 FROM users
 WHERE username=?;)SQL"
@@ -53,11 +28,11 @@ WHERE username=?;)SQL"
             pstmt->setString(1, submission.user_name);
             std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
             if (!res->next()) 
-                throw sql::SQLException("用户不存在");
+                throw sql::SQLException("user not exists");
             uint32_t user_id = res->getUInt("id");
             
             pstmt.reset(
-                m_Conn->prepareStatement(
+                m_ConnPtr->prepareStatement(
 R"SQL(SELECT id
 FROM problems
 WHERE title=?;)SQL"
@@ -66,11 +41,11 @@ WHERE title=?;)SQL"
             pstmt->setString(1, submission.problem_title);
             res.reset(pstmt->executeQuery());
             if (!res->next())
-                throw sql::SQLException("试题不存在");
+                throw sql::SQLException("problem not exists");
             uint32_t problem_id = res->getUInt("id");
 
             pstmt.reset(
-                m_Conn->prepareStatement(
+                m_ConnPtr->prepareStatement(
                     "INSERT INTO submissions (user_id, problem_id, language, code, overall_status) "
                     "VALUES (?, ?, ?, ?, 'PENDING')"
                 )
@@ -81,7 +56,7 @@ WHERE title=?;)SQL"
             pstmt->setString(4, source_code);
             pstmt->executeUpdate();
         } catch (const sql::SQLException& e) {
-            throw sql::SQLException(std::format("创建提交失败: {}", e.what()));
+            throw sql::SQLException(std::format("create submission failed: {}", e.what()));
         }
     }
 
@@ -90,7 +65,7 @@ WHERE title=?;)SQL"
     {
         try {
             std::unique_ptr<sql::PreparedStatement> pstmt(
-                m_Conn->prepareStatement(
+                m_ConnPtr->prepareStatement(
 R"SQL(UPDATE submissions
 SET overall_status=?;)SQL"
                 )
@@ -100,8 +75,8 @@ SET overall_status=?;)SQL"
             
             for (size_t i{0}; i < judge_result.results.size(); ++i) {
                 pstmt.reset(
-                    m_Conn->prepareStatement(
-R"SQL(INSERT INTO judge_results (submission_id, test_case_id, status, cpu_time_us, memory_kb, exit_code, signal, create_at)
+                    m_ConnPtr->prepareStatement(
+R"SQL(INSERT INTO judge_results (submission_id, test_case_id, status, cpu_time_us, memory_kb, exit_code, signal_code, create_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?);)SQL"
                     )
                 );
@@ -116,7 +91,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?);)SQL"
                 pstmt->executeUpdate();
             }
         } catch (const sql::SQLException &e) {
-            throw sql::SQLException(std::format("写入评测结果失败: {}", e.what()));
+            throw sql::SQLException(std::format("write judge result failed: {}", e.what()));
         }
     }
 
@@ -124,7 +99,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?);)SQL"
     {
         try {
             std::unique_ptr<sql::PreparedStatement> pstmt(
-                m_Conn->prepareStatement(
+                m_ConnPtr->prepareStatement(
                     std::format("UPDATE submissions SET overall_status = ? WHERE id = ?;").data()
                 )
             );
@@ -132,7 +107,30 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?);)SQL"
             pstmt->setString(2, boost::uuids::to_string(sub_id));
             pstmt->executeUpdate();
         } catch (const sql::SQLException &e) {
-            throw sql::SQLException(std::format("更新提交状态失败: {}", e.what()));
+            throw sql::SQLException(std::format("update submission status failed: {}", e.what()));
+        }
+    }
+
+    void JudgeWriter::insertTestCases(const std::vector<TestCase>& test_cases, std::string_view problem_title)
+    {
+        try {
+            std::unique_ptr<sql::PreparedStatement> pstmt(
+                m_ConnPtr->prepareStatement(
+R"SQL(INSERT INTO test_cases (problem_id, stdin, expected_output, sequence, is_hidden)
+VALUES (?, ?, ?, ?, ?);)SQL"
+                )
+            );
+            for (const auto& tc : test_cases) {
+                pstmt->setString(1, problem_title.data());
+                pstmt->setString(2, tc.stdin.data());
+                pstmt->setString(3, tc.expected_output.data());
+                pstmt->setInt(4, tc.sequence);
+                pstmt->setBoolean(5, !tc.is_hidden);
+                pstmt->executeUpdate();
+            }
+        } catch (const sql::SQLException& e) {
+            LOG_ERROR("insert test cases failed: {}", e.what());
+            throw sql::SQLException(std::format("insert test case failed: {}", e.what()));
         }
     }
 }

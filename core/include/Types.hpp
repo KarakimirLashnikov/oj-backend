@@ -8,6 +8,15 @@ namespace Core::Types
     using SubID = boost::uuids::random_generator_pure::result_type;
     using StatusCode = std::uint8_t;
 
+    enum class DifficultyLevel
+    {
+        Beginner = 1,
+        Basic,
+        Intermediate,
+        Advanced,
+        Expert
+    };
+
     struct TestCase
     {
         std::string stdin;
@@ -22,9 +31,11 @@ namespace Core::Types
                             std::is_floating_point_v<T> ||
                             std::is_same_v<T, bool>;
 
+    std::string difficultyToString(DifficultyLevel diff);
     std::string timeStampToMySQLString(const TimeStamp& ts);
 }
 
 namespace bp = boost::process;
 namespace fs = std::filesystem;
 namespace asio = boost::asio;
+using njson = nlohmann::json;
