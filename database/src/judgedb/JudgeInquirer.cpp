@@ -26,10 +26,11 @@ namespace JudgeDB
     }
 
     JudgeInquirer::JudgeInquirer(std::string_view host
+                                , uint16_t port
                                 , std::string_view user
                                 , std::string_view password
                                 , std::string_view database)
-        : MySQLDB::Database{ host, user, password, database }
+        : MySQLDB::Database{ host, port, user, password, database }
     {
     }
 
@@ -39,8 +40,7 @@ namespace JudgeDB
         std::string sub_id{ boost::uuids::to_string(submission_id) };
         std::unique_ptr<sql::PreparedStatement> pstmt(
             m_ConnPtr->prepareStatement(
-                "SELECT submission_id, submit_time FROM submissions "
-                "WHERE submission_id=?"
+                R"SQL(SELECT * FROM submissions WHERE submission_id = ?)SQL"
             )
         );
         pstmt->setString(1, sub_id);
@@ -53,7 +53,7 @@ namespace JudgeDB
     {
         std::unique_ptr<sql::PreparedStatement> pstmt(
             m_ConnPtr->prepareStatement(
-                R"SQL(SELECT cpu_time_limit_s, cpu_extra_time_s, wall_time_limit_s, memory_limit_kb, stack_limit_kb
+R"SQL(SELECT time_limit_ms, extra_time_ms, wall_time_ms, memory_limit_kb, stack_limit_kb
 FROM problems
 WHERE title=? LIMIT 1)SQL"
             )
@@ -64,11 +64,11 @@ WHERE title=? LIMIT 1)SQL"
         
         if (res->next()) {
             Judge::ResourceLimits limits;
-            limits.cpu_time_limit_s = res->getDouble("cpu_time_limit_s");
-            limits.cpu_extra_time_s = res->getDouble("cpu_extra_time_s");
-            limits.wall_time_limit_s = res->getDouble("wall_time_limit_s");
-            limits.memory_limit_kb = res->getInt("memory_limit_kb");
-            limits.stack_limit_kb = res->getInt("stack_limit_kb");
+            limits.time_limit_s = res->getUInt("time_limit_ms") / 1000.f;
+            limits.extra_time_s = res->getUInt("extra_time_ms") / 1000.f;
+            limits.wall_time_s = res->getUInt("wall_time_ms") / 1000.f;
+            limits.memory_limit_kb = res->getUInt("memory_limit_kb");
+            limits.stack_limit_kb = res->getUInt("stack_limit_kb");
             
             return limits;
         }
@@ -79,7 +79,7 @@ WHERE title=? LIMIT 1)SQL"
     TestCasesGenerator JudgeInquirer::getTestCases(std::string_view problem_title)
     {
         // 首先获取题目ID
-        int problem_id = -1;
+        uint32_t problem_id{};
         try {
             std::unique_ptr<sql::PreparedStatement> pstmt(
                 m_ConnPtr->prepareStatement("SELECT id FROM problems WHERE title = ?")
@@ -92,7 +92,7 @@ WHERE title=? LIMIT 1)SQL"
                 throw sql::SQLException("No such problem.");
             }
             
-            problem_id = res->getInt("id");
+            problem_id = res->getUInt("id");
         } catch (sql::SQLException& e) {
             throw sql::SQLException("select problem failed: " + std::string(e.what()));
         }
@@ -102,11 +102,13 @@ WHERE title=? LIMIT 1)SQL"
         
         try {
             std::unique_ptr<sql::PreparedStatement> pstmt(
-                m_ConnPtr->prepareStatement("SELECT stdin, expected_output, sequence, is_hidden "
-                                    "FROM test_cases WHERE problem_id = ? "
-                                    "ORDER BY sequence ASC")
+                m_ConnPtr->prepareStatement(
+R"SQL(SELECT stdin, expected_output, sequence, is_hidden
+FROM test_cases WHERE problem_id = ? 
+ORDER BY sequence ASC)SQL"
+                )
             );
-            pstmt->setInt(1, problem_id);
+            pstmt->setUInt(1, problem_id);
             
             std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
             

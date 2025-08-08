@@ -39,7 +39,7 @@ namespace Judge
             Exceptions::checkFileReadable(kafel_file_path);
             std::ifstream f{ kafel_file_path };
             if (!f) {
-                throw Exceptions::makeSystemException("kafel policy file " + kafel_file_path.string() + " open failed", __FILE__, __LINE__);
+                throw Exceptions::makeSystemException("kafel policy file " + kafel_file_path.string() + " open failed");
             }
             std::string kafel_policy{ std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>() };
 
@@ -65,7 +65,7 @@ namespace Judge
                 LOG_ERROR("error info(hex): {}", hex_dump);
                 
                 kafel_ctxt_destroy(&ctxt);
-                throw Exceptions::SystemException(compile_result, "Kafel compile failed, error_msg: " + error_msg, __FILE__, __LINE__);
+                throw Exceptions::SystemException(compile_result, "Kafel compile failed, error_msg: " + error_msg);
             }
             kafel_ctxt_destroy(&ctxt);
             
@@ -85,10 +85,10 @@ namespace Judge
     CppActuator::CppActuator()
     {
         if (!IS_SYSTEM_INITIALIZED) 
-            throw Exceptions::SystemException(-1, "system not initialized", __FILE__, __LINE__);
+            throw Exceptions::SystemException(-1, "system not initialized");
 
         if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
-            throw Exceptions::SystemException(errno, "prctl(PR_SET_NO_NEW_PRIVS)", __FILE__, __LINE__);
+            throw Exceptions::SystemException(errno, "prctl(PR_SET_NO_NEW_PRIVS)");
         }
     }
 
@@ -98,7 +98,7 @@ namespace Judge
         Exceptions::checkFileWritable(cgroup_path);
         std::ofstream procs_file(cgroup_path / "cgroup.procs");
         if (!procs_file) {
-            throw Exceptions::makeSystemException("Open cgroup.procs in CppActuator::joinCgroup", __FILE__, __LINE__);
+            throw Exceptions::makeSystemException("Open cgroup.procs in CppActuator::joinCgroup");
         }
         procs_file << getpid() << std::endl;
     }
@@ -110,15 +110,15 @@ namespace Judge
 
         // 使用匿名管道 , 0 为父端， 1 为子端
         int stdout_pipe[2], stderr_pipe[2], stdin_pipe[2];
-        if (pipe(stdout_pipe)) throw Exceptions::SystemException(errno, "pipe stdout failed", __FILE__, __LINE__);
-        if (pipe(stderr_pipe)) throw Exceptions::SystemException(errno, "pipe stderr failed", __FILE__, __LINE__);
-        if (pipe(stdin_pipe)) throw Exceptions::SystemException(errno, "pipe stdin failed", __FILE__, __LINE__);
+        if (pipe(stdout_pipe)) throw Exceptions::SystemException(errno, "pipe stdout failed");
+        if (pipe(stderr_pipe)) throw Exceptions::SystemException(errno, "pipe stderr failed");
+        if (pipe(stdin_pipe)) throw Exceptions::SystemException(errno, "pipe stdin failed");
 
         auto start_time{ std::chrono::steady_clock::now() };
         
         pid_t child_pid{ fork() };
         if (child_pid < 0) {
-            throw Exceptions::SystemException(errno, "fork failed", __FILE__, __LINE__);
+            throw Exceptions::SystemException(errno, "fork failed");
         }
         else if (child_pid == 0) {
             // 子进程逻辑
@@ -144,8 +144,7 @@ namespace Judge
                     close(stdout_pipe[0]);
                     close(stderr_pipe[0]);
                     throw Exceptions::makeSystemException(
-                        "write to child's stdin failed in CppActuator::execute: " + std::string(strerror(errno))
-                        , __FILE__, __LINE__);
+                        "write to child's stdin failed in CppActuator::execute: " + std::string(strerror(errno)));
                 }
                 total_written += written;
             }
@@ -233,7 +232,7 @@ namespace Judge
         // 设置CPU时间限制
         std::ofstream cpu_max_file(cgroup_path / "cpu.max");
         if (cpu_max_file) {
-            cpu_max_file << (static_cast<uint64_t>(limits.cpu_time_limit_s * 1000000)) << " 1000000" << std::endl;
+            cpu_max_file << (static_cast<uint64_t>((limits.time_limit_s + limits.extra_time_s) * 1000000)) << " 1000000" << std::endl;
         } else {
             LOG_WARN("Failed to write cpu.max");
         }
@@ -302,7 +301,7 @@ namespace Judge
         int status = 0;
         
         const auto timeout_time = start_time + std::chrono::microseconds(
-            static_cast<int64_t>(limits.wall_time_limit_s * 1000000));
+            static_cast<int64_t>(limits.wall_time_s * 1000000));
         bool timeout{ false };
         
         while (!process_exited) {
@@ -387,8 +386,8 @@ namespace Judge
         
         result.stdout = std::move(stdout_data);
         result.stderr = std::move(stderr_data);
-        result.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-        result.signal = WIFSIGNALED(status) ? WTERMSIG(status) : 0;
+        result.test_result.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        result.test_result.signal = WIFSIGNALED(status) ? WTERMSIG(status) : 0;
         
         try {
             // 读取内存峰值
@@ -397,7 +396,7 @@ namespace Judge
                 if (mem_file) {
                     uint64_t mem_peak = 0;
                     mem_file >> mem_peak;
-                    result.memory_kb = mem_peak / 1024;
+                    result.test_result.memory_kb = mem_peak / 1024;
                 }
             }
             
@@ -409,32 +408,32 @@ namespace Judge
                     if (line.find("usage_usec") == 0) {
                         uint64_t cpu_us;
                         if (sscanf(line.c_str(), "usage_usec %lu", &cpu_us) == 1) {
-                            result.cpu_time_us = cpu_us;
+                            result.test_result.duration_us = cpu_us;
                         }
                     }
                 }
             }
         } catch (const std::exception& e) {
             LOG_ERROR("Failed to read cgroup stats: {}", e.what());
-            result.cpu_time_us = 0;
-            result.memory_kb = 0;
-            result.status = TestStatus::INTERNAL_ERROR;
+            result.test_result.duration_us = 0;
+            result.test_result.memory_kb = 0;
+            result.test_result.status = TestStatus::INTERNAL_ERROR;
             cleanupCgroup(cgroup_path);
             return;
         }
         
-        result.create_at = start_time;
-        result.finish_at = std::chrono::steady_clock::now();
+        result.test_result.create_at = start_time;
+        result.test_result.exit_at = std::chrono::steady_clock::now();
 
         // 判断退出原因
         if (timeout) {
-            result.status = TestStatus::TIME_LIMIT_EXCEEDED;
-        } else if (result.memory_kb >= limits.memory_limit_kb) {
-            result.status = TestStatus::MEMORY_LIMIT_EXCEEDED;
-        } else if (result.signal != 0 || result.exit_code != 0) {
-            result.status = TestStatus::RUNTIME_ERROR;
+            result.test_result.status = TestStatus::TIME_LIMIT_EXCEEDED;
+        } else if (result.test_result.memory_kb >= limits.memory_limit_kb) {
+            result.test_result.status = TestStatus::MEMORY_LIMIT_EXCEEDED;
+        } else if (result.test_result.signal != 0 || result.test_result.exit_code != 0) {
+            result.test_result.status = TestStatus::RUNTIME_ERROR;
         } else {
-            result.status = TestStatus::UNKNOWN; // 未判定 , 默认
+            result.test_result.status = TestStatus::UNKNOWN; // 未判定 , 默认
         }
 
         // 清理cgroup

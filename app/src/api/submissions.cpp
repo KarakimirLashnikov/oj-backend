@@ -23,56 +23,58 @@ namespace OJApp::Submissions
 
     void submit(const httplib::Request &req, httplib::Response &res)
     {
-        auto j = njson::parse(req.body);
         try {
-            if (!j.contains("user_name") ||
-                !j.contains("problem_title") || 
-                !j.contains("source_code") || 
-                !j.contains("language_id")) {
-                    throw Exceptions::ParameterException(MISSING_PARAM, "submissions", "缺少提交信息");
+            njson json = njson::parse(req.body);
+            if (!json.contains("username") ||
+                !json.contains("problem_title") || 
+                !json.contains("source_code") || 
+                !json.contains("language_id")) {
+                    throw Exceptions::ParameterException(MISSING_PARAM, "submissions", "Missing parameters");
             }
 
             auto& cfg{ App.getConfigurator() };
             JudgeDB::UserInquirer ui{
-                cfg.get<std::string>("judgedb", "host", "127.0.0.1"),
-                cfg.get<std::string>("judgedb", "username", "root"),
-                cfg.get<std::string>("judgedb", "password"),
-                cfg.get<std::string>("judgedb", "database", "judgedb")
+                cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                cfg.get<uint16_t>("judgedb", "PORT", 3306),
+                cfg.get<std::string>("judgedb", "USERNAME", "root"),
+                cfg.get<std::string>("judgedb", "PASSWORD"),
+                cfg.get<std::string>("judgedb", "DATABASE", "judgedb")
             };
-            if (!ui.isExist(j.at("user_name").get<std::string>())) {
-                throw Exceptions::ParameterException(VALUE_ERROR, "user_name", "用户不存在");
+            if (!ui.isExist(json.at("username").get<std::string>())) {
+                throw Exceptions::ParameterException(VALUE_ERROR, "username", "User doesn't exist");
             }
 
             JudgeDB::ProblemInquirer pi{
-                cfg.get<std::string>("judgedb", "host", "127.0.0.1"),
-                cfg.get<std::string>("judgedb", "username", "root"),
-                cfg.get<std::string>("judgedb", "password"),
-                cfg.get<std::string>("judgedb", "database", "judgedb")
+                cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                cfg.get<uint16_t>("judgedb", "PORT", 3306),
+                cfg.get<std::string>("judgedb", "USERNAME", "root"),
+                cfg.get<std::string>("judgedb", "PASSWORD"),
+                cfg.get<std::string>("judgedb", "DATABASE", "judgedb")
             };
-            if (!pi.isExist(j.at("problem_title").get<std::string>())) {
-                throw Exceptions::ParameterException(VALUE_ERROR, "problem_title", "题目不存在");
+            if (!pi.isExist(json.at("problem_title").get<std::string>())) {
+                throw Exceptions::ParameterException(VALUE_ERROR, "problem_title", "Problem title doesn't exist");
             }
 
             Submission sub{
-                .user_name = j.at("user_name").get<std::string>(),
-                .problem_title = j.at("problem_title").get<std::string>(),
-                .uploade_code_file_path = j.at("source_code").get<std::string>(),
+                .username = json.at("username").get<std::string>(),
+                .problem_title = json.at("problem_title").get<std::string>(),
+                .uploade_code_file_path = json.at("source_code").get<std::string>(),
                 .submission_id =  boost::uuids::random_generator()(),
-                .language_id = static_cast<LangID>(j.at("language_id").get<int>()),
+                .language_id = static_cast<LangID>(json.at("language_id").get<int>()),
             };
             std::string sub_id{ boost::uuids::to_string(sub.submission_id) };
-            if (j.contains("compile_options")) {
-                for (const auto &opt : j.at("compile_options")) {
+            if (json.contains("compile_options")) {
+                for (const auto &opt : json.at("compile_options")) {
                     sub.compile_options.push_back(opt.get<std::string>());
                 }
             }
 
             if (!App.submit(std::move(sub))) {
-                throw Exceptions::makeSystemException("judge submission error", __FILE__, __LINE__);
+                throw Exceptions::makeSystemException("judge submission error");
             }
 
             res.status = OK;
-            auto response{ njson{{"status", "success"}, {"message", "提交成功"}, {"submission_id", sub_id}} };
+            auto response = njson{{"status", "success"}, {"message", "submission succeed"}, {"submission_id", sub_id}};
             res.set_content(response.dump(), "application/json");
         } catch (const Exceptions::ParameterException& e) {
             res.status = BadRequest;
@@ -89,4 +91,3 @@ namespace OJApp::Submissions
         }
     }
 }
-

@@ -7,10 +7,11 @@
 namespace JudgeDB
 {
     ProblemInquirer::ProblemInquirer(std::string_view host
-        , std::string_view username
-        , std::string_view password
-        , std::string_view database)
-        : MySQLDB::Database{ host, username, password, database }
+                                    , uint16_t port
+                                    , std::string_view user
+                                    , std::string_view password
+                                    , std::string_view database)
+        : MySQLDB::Database{ host, port, user, password, database }
     {
     }
 
@@ -38,12 +39,13 @@ R"SQL(SELECT * FROM problems ORDER BY id ASC;)SQL"
         while (result->next()) {
             Judge::Problem problem{
                 .title = result->getString("title"),
-                .time_limit_s = static_cast<float>(result->getUInt("time_limit_ms")) / 1'000,
-                .memory_limit_kb = result->getUInt("memory_limit_kb"),
-                .stack_limit_kb = result->getUInt("stack_limit_kb"),
-                .description = result->getString("description")
+                .description = result->getString("description"),
             };
-            problems.push_back(std::move(problem));
+            problem.limits.time_limit_s = static_cast<float>(result->getUInt("time_limit_ms")) / 1'000;
+            problem.limits.extra_time_s = static_cast<float>(result->getUInt("extra_time_ms")) / 1'000;
+            problem.limits.wall_time_s = static_cast<float>(result->getUInt("wall_time_ms")) / 1'000;
+            problem.limits.memory_limit_kb = result->getUInt("memory_limit_kb");
+            problem.limits.stack_limit_kb = result->getUInt("stack_limit_kb");
         }
         return problems;
     }
@@ -62,11 +64,13 @@ R"SQL(SELECT * FROM problems WHERE title = ?;)SQL"
         }
         Judge::Problem problem{
             .title = result->getString("title"),
-            .time_limit_s = static_cast<float>(result->getUInt("time_limit_ms")) / 1'000,
-            .memory_limit_kb = result->getUInt("memory_limit_kb"),
-            .stack_limit_kb = result->getUInt("stack_limit_kb"),
             .description = result->getString("description")
         };
+        problem.limits.time_limit_s = static_cast<float>(result->getUInt("time_limit_ms")) / 1'000;
+        problem.limits.extra_time_s = static_cast<float>(result->getUInt("extra_time_ms")) / 1'000;
+        problem.limits.wall_time_s = static_cast<float>(result->getUInt("wall_time_ms")) / 1'000;
+        problem.limits.memory_limit_kb = result->getUInt("memory_limit_kb");
+        problem.limits.stack_limit_kb = result->getUInt("stack_limit_kb");
         return problem;
     }
 
@@ -82,6 +86,6 @@ R"SQL(SELECT id FROM problems WHERE title = ?;)SQL"
         if (!result->next()) {
             throw sql::SQLException{ "No problem with this title." };
         }
-        return result->getInt("id");
+        return result->getUInt("id");
     }
 }

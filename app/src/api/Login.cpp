@@ -24,25 +24,26 @@ namespace OJApp::Login
             if (json.contains("username")) {
                 username = json.at("username").get<std::string>();
             } else {
-                throw Exceptions::ParameterException(MISSING_PARAM, "username", "username 字段缺失");
+                throw Exceptions::ParameterException(MISSING_PARAM, "username", "Missing param: username");
             }
 
             if (json.contains("password")) {
                 password = json.at("password").get<std::string>();
             } else {
-                throw Exceptions::ParameterException(MISSING_PARAM, "password", "password 字段缺失");
+                throw Exceptions::ParameterException(MISSING_PARAM, "password", "Missing param: password");
             }
 
             // 1. 从数据库获取用户记录
             Core::Configurator& cfg{ App.getConfigurator() };
             JudgeDB::UserInquirer userIq{
                 cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                cfg.get<uint16_t>("judgedb", "PORT", 3306),
                 cfg.get<std::string>("judgedb", "USERNAME", "root"),
                 cfg.get<std::string>("judgedb", "PASSWORD", ""),
                 cfg.get<std::string>("judgedb", "DATABASE", "userdb")
             };
             if (!userIq.isExist(username)) {
-                throw Exceptions::ParameterException(VALUE_ERROR, "username", "用户名不存在");
+                throw Exceptions::ParameterException(VALUE_ERROR, "username", "username doesn't exist");
             }
             
             // 2. 验证密码
@@ -52,12 +53,12 @@ namespace OJApp::Login
                     password.c_str(),
                     password.length()
             ) != 0) {
-                throw Exceptions::ParameterException(VALUE_ERROR, "password", "密码错误");
+                throw Exceptions::ParameterException(VALUE_ERROR, "password", "password doesn't match");
             }
             
             // 成功响应 (实际应返回会话令牌)
             res.status = OK;
-            njson response{ njson{{"status", "success"}, {"message", "登陆成功"}}};
+            njson response = njson{{"status", "success"}, {"message", "login succeed"}};
             res.set_content(response.dump(), "application/json");
         } catch (const Exceptions::ParameterException& e) {
             res.status = BadRequest;
@@ -77,24 +78,24 @@ namespace OJApp::Login
     void signup(const httplib::Request &req, httplib::Response &res) {
         try {
             // 解析 JSON 请求体
-            auto json{ njson::parse(req.body) };
+            njson json = njson::parse(req.body);
             std::string username{}, password{}, email{};
             if (json.contains("username")) {
                 username = json.at("username").get<std::string>();
             } else {
-                throw Exceptions::ParameterException(MISSING_PARAM, "username", "username 字段缺失");
+                throw Exceptions::ParameterException(MISSING_PARAM, "username", "Missing param: username");
             }
             
             if (json.contains("password")) {
                 password = json.at("password").get<std::string>();
             } else {
-                throw Exceptions::ParameterException(MISSING_PARAM, "password", "<PASSWORD>");
+                throw Exceptions::ParameterException(MISSING_PARAM, "password", "Missing param: password");
             }
             
             if (json.contains("email")) {
                 email = json.at("email").get<std::string>();
             } else {
-                throw Exceptions::ParameterException(MISSING_PARAM, "email", "email 字段缺失");
+                throw Exceptions::ParameterException(MISSING_PARAM, "email", "Missing param: email");
             }
 
             // 生成随机盐值
@@ -110,24 +111,26 @@ namespace OJApp::Login
                 crypto_pwhash_OPSLIMIT_INTERACTIVE,
                 crypto_pwhash_MEMLIMIT_INTERACTIVE
             ) != 0) {
-                throw Exceptions::makeSystemException("crypto_pwhash_str failed", __FILE__, __LINE__);
+                throw Exceptions::makeSystemException("crypto_pwhash_str failed");
             }
 
             // 1. 检查用户名是否已存在
             Core::Configurator& cfg{ App.getConfigurator() };
             JudgeDB::UserInquirer userIq{
                 cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                cfg.get<uint16_t>("judgedb", "PORT", 3306),
                 cfg.get<std::string>("judgedb", "USERNAME", "root"),
                 cfg.get<std::string>("judgedb", "PASSWORD", ""),
                 cfg.get<std::string>("judgedb", "DATABASE", "userdb")
             };
             if (userIq.isExist(username)) {
-                throw Exceptions::ParameterException(VALUE_ERROR, "username", "用户名已存在");
+                throw Exceptions::ParameterException(VALUE_ERROR, "username", "username already exist");
             }
             
             // 2. 存储到数据库
             JudgeDB::UserWriter userWt{
                 cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                cfg.get<uint16_t>("judgedb", "PORT", 3306),
                 cfg.get<std::string>("judgedb", "USERNAME", "root"),
                 cfg.get<std::string>("judgedb", "PASSWORD", ""),
                 cfg.get<std::string>("judgedb", "DATABASE", "userdb")
@@ -136,7 +139,7 @@ namespace OJApp::Login
             
             // 成功响应
             res.status = OK;
-            njson response{ njson{{"status", "success"}, {"message", "注册成功"}}};
+            njson response = njson{{"status", "success"}, {"message", "signup succeed"}};
             res.set_content(response.dump(), "application/json");
         } catch (const Exceptions::ParameterException& e) {
             res.status = BadRequest;

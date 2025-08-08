@@ -1,7 +1,3 @@
-我将优化文档以提高可读性和实用性，主要改进配置步骤的清晰度和API文档的完整性：
-
-### 优化后的README.md
-
 ```markdown
 ## 环境配置
 ### 依赖库安装
@@ -49,25 +45,31 @@ find_library(MYSQLCPPCONN_LIBRARY NAMES mysqlcppconn PATHS
 **请求参数**  
 | 字段          | 类型     | 必填 | 说明                     |
 |---------------|----------|------|--------------------------|
-| user_name     | string   | ✓    | 用户名                   |
+| username     | string   | ✓    | 用户名（需已存在）       |
 | problem_title | string   | ✓    | 题目名称（需已存在）     |
 | source_code   | string   | ✓    | 源代码                   |
-| language_id   | string   | ✓    | 语言ID（当前仅支持1: C++）|
-| compile_options| array    | ✗    | 编译选项数组             |
+| language_id   | integer  | ✓    | 语言ID（对应编程语言类型）|
+| compile_options| array    | ✗    | 编译选项数组（字符串元素）|
 
 **响应示例**  
 ```json
 // 成功 (HTTP 200)
 {
   "status": "success",
-  "message": "Submission received",
-  "submission_id": "<KEY>" // boost::uuid::to_string, length == 36
+  "message": "submission succeed",
+  "submission_id": "<UUID>" // boost::uuid生成的36位字符串
 }
 
-// 失败 (HTTP 400)
+// 参数错误 (HTTP 400)
 {
   "status": "failure",
-  "message": "Problem not found"
+  "message": "Missing parameters"
+}
+
+// 系统错误 (HTTP 500)
+{
+  "status": "failure",
+  "message": "judge submission error"
 }
 ```
 
@@ -81,16 +83,19 @@ find_library(MYSQLCPPCONN_LIBRARY NAMES mysqlcppconn PATHS
 **请求参数**  
 | 字段      | 类型   | 必填 | 说明         |
 |-----------|--------|------|--------------|
-| user_name | string | ✓    | 用户名       |
+| username | string | ✓    | 用户名       |
 | password  | string | ✓    | 密码         |
 
-**响应**  
+**响应示例**  
 ```json
-// 成功
-{"status": "success", "message": "Login successful"}
+// 成功 (HTTP 200)
+{"status": "success", "message": "login succeed"}
 
-// 失败
-{"status": "failure", "message": "Invalid credentials"}
+// 参数错误 (HTTP 400)
+{"status": "failure", "message": "username doesn't exist"}
+
+// 系统错误 (HTTP 500)
+{"status": "failure", "message": "数据库操作异常信息"}
 ```
 
 #### 用户注册
@@ -100,13 +105,20 @@ find_library(MYSQLCPPCONN_LIBRARY NAMES mysqlcppconn PATHS
 **请求参数**  
 | 字段      | 类型   | 必填 | 约束          |
 |-----------|--------|------|---------------|
-| user_name | string | ✓    | 唯一用户名    |
-| password  | string | ✓    | 密码          |
-| email     | string | ✓    | 有效邮箱格式  |
+| username | string | ✓    | 唯一用户名    |
+| password  | string | ✓    | 密码（将被加密存储）|
+| email     | string | ✓    | 邮箱地址      |
 
-**响应**  
+**响应示例**  
 ```json
-{"status": "success", "message": "User created"}
+// 成功 (HTTP 200)
+{"status": "success", "message": "signup succeed"}
+
+// 参数错误 (HTTP 400)
+{"status": "failure", "message": "username already exist"}
+
+// 系统错误 (HTTP 500)
+{"status": "failure", "message": "crypto_pwhash_str failed"}
 ```
 
 ---
@@ -117,24 +129,43 @@ find_library(MYSQLCPPCONN_LIBRARY NAMES mysqlcppconn PATHS
 `POST {base_url}/api/problems/create`
 
 **请求参数**  
-| 字段            | 类型    | 必填 | 约束                     |
+| 字段            | 类型    | 必填 | 说明                     |
 |-----------------|---------|------|--------------------------|
-| title           | string  | ✓    | 标题长度 < 128字符       |
-| time_limit_s    | float   | ✓    | 时间限制(秒)             |
-| memory_limit_kb | integer | ✓    | 内存限制(KB)             |
-| stack_limit_kb  | integer | ✓    | 栈限制(KB)               |
-| difficulty      | integer | ✓    | 难度等级(1-5)            |
+| title           | string  | ✓    | 题目标题                 |
+| time_limit_s    | float   | ✓    | 时间限制（秒）           |
+| memory_limit_kb | integer | ✓    | 内存限制（KB）           |
+| stack_limit_kb  | integer | ✓    | 栈限制（KB）             |
+| difficulty      | integer | ✓    | 难度等级（对应DifficultyLevel枚举）|
 | description     | string  | ✓    | 题目描述                 |
+| extra_time_s    | float   | ✗    | 额外时间（秒，默认0.5）  |
+| wall_time_s     | float   | ✗    | 挂钟时间（秒，默认time_limit_s + 1.0）|
 
-**响应**  
+**响应示例**  
 ```json
-{"status": "success", "message": "Problem created"}
+// 成功 (HTTP 200)
+{"status": "success", "message": "<title> created successfully"}
+
+// 参数错误 (HTTP 400)
+{"status": "failure", "message": "Missing parameters"}
+
+// 系统错误 (HTTP 500)
+{"status": "failure", "message": "数据库操作异常信息"}
 ```
 
 #### 更新题目
 **Endpoint**  
 `POST {base_url}/api/problems/update`  
-*参数同创建接口，需确保题目已存在*
+
+**请求参数**：同创建题目接口（需确保题目已存在）
+
+**响应示例**  
+```json
+// 成功 (HTTP 200)
+{"status": "success", "message": "<title> updated successfully"}
+
+// 参数错误 (HTTP 400)
+{"status": "failure", "message": "Problem <title> does not exist"}
+```
 
 #### 上传测试用例
 **Endpoint**  
@@ -143,20 +174,27 @@ find_library(MYSQLCPPCONN_LIBRARY NAMES mysqlcppconn PATHS
 **请求参数**  
 | 字段          | 类型  | 必填 | 说明                          |
 |---------------|-------|------|-------------------------------|
-| problem_title | string| ✓    | 关联的题目名称                |
+| problem_title | string| ✓    | 关联的题目名称（需已存在）    |
 | test_cases    | array | ✓    | 测试用例数组                  |
 
 **测试用例结构**  
 ```json
 {
-  "stdin": "输入数据",
-  "expected_stdout": "预期输出",
-  "sequence": 排序标识,  // 使用整数序列
-  "is_hidden": true      // 可选，是否隐藏用例
+  "stdin": "输入数据字符串",
+  "expected_output": "预期输出字符串",
+  "sequence": 1,  // 排序标识（整数）
+  "hidden": false  // 可选，是否为隐藏用例（默认false）
 }
 ```
 
-**响应**  
+**响应示例**  
 ```json
-{"status": "success", "message": "Test cases added"}
+// 成功 (HTTP 200)
+{"status": "success", "message": "Test cases successfully uploaded for <title>"}
+
+// 参数错误 (HTTP 400)
+{"status": "failure", "message": "Missing test cases"}
+
+// 系统错误 (HTTP 500)
+{"status": "failure", "message": "upload test cases failed"}
 ```

@@ -33,17 +33,24 @@ namespace Judge
         }
     }
 
+    struct TestResult
+    {
+        TimeStamp create_at{};
+        TimeStamp exit_at{};
+        uint64_t duration_us{0};
+        int exit_code{-1};
+        int memory_kb{-1};
+        int signal{-1};
+        TestStatus status;
+
+        [[nodiscard]] std::string toString() const;
+    };
+
 
     struct ExecutionResult
     {
         std::string stdout;
         std::string stderr;
-        int exit_code{-1};
-        int memory_kb{-1};
-        int signal{-1};
-        uint64_t cpu_time_us;
-        TimeStamp create_at{};
-        TimeStamp finish_at{};
-        TestStatus status{TestStatus::UNKNOWN};
+        TestResult test_result;
     };
 }

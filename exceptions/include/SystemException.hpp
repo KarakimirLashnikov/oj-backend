@@ -8,9 +8,7 @@ namespace Exceptions
     public:
         // 构造函数
         explicit SystemException(int errorCode
-            , const std::string &operation
-            , const char* file
-            , int line) noexcept;
+            , const std::string &operation) noexcept;
         
         // 获取系统错误码
         inline int errorCode() const noexcept { return m_errorCode; }
@@ -32,5 +30,5 @@ namespace Exceptions
     };
 
     // 根据当前errno创建系统异常
-    SystemException makeSystemException(const std::string& operation, const char* file, int line);
+    SystemException makeSystemException(const std::string& operation);
 }

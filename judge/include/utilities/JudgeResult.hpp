@@ -21,21 +21,6 @@ namespace Judge
 
     std::string toString(SubmissionStatus st);
 
-    struct TestResult
-    {
-        TimeStamp create_at{};
-        TimeStamp exit_at{};
-        uint64_t duration_us{0};
-        int exit_code{-1};
-        int memory_kb{-1};
-        int signal{-1};
-        TestStatus status;
-        
-        TestResult(const ExecutionResult &er);
-
-        [[nodiscard]] std::string toString() const;
-    };
-
 
     struct JudgeResult
     {
@@ -43,9 +28,7 @@ namespace Judge
         std::string problem_title{};
         std::string compile_msg{};
         std::vector<TestResult> results{};
-        TimeStamp createAt{};
-        TimeStamp finishAt{};
-        SubID sub_id{};
+        std::string sub_id{};
         
         void setStatus();
         

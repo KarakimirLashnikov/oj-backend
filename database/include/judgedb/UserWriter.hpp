@@ -9,7 +9,8 @@ namespace JudgeDB
     {
     public:
         UserWriter(std::string_view host
-                  , std::string_view username // 数据库登陆用户名
+                  , uint16_t port
+                  , std::string_view user
                   , std::string_view password
                   , std::string_view database);
 

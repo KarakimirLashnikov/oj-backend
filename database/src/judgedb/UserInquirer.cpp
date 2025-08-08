@@ -5,10 +5,11 @@
 namespace JudgeDB
 {
     UserInquirer::UserInquirer(std::string_view host
-        , std::string_view username
+        , uint16_t port
+        , std::string_view user
         , std::string_view password
         , std::string_view database)
-        : MySQLDB::Database{ host, username, password, database }
+        : MySQLDB::Database{ host, port, user, password, database }
     {
     }
 

@@ -32,7 +32,6 @@ namespace Core::Types
                             std::is_same_v<T, bool>;
 
     std::string difficultyToString(DifficultyLevel diff);
-    std::string timeStampToMySQLString(const TimeStamp& ts);
 }
 
 namespace bp = boost::process;

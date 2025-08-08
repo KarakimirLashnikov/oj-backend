@@ -3,6 +3,7 @@
 #include "Core.hpp"
 #include "utilities/Language.hpp"
 #include "utilities/JudgeResult.hpp"
+#include "utilities/ResourceLimits.hpp"
 
 namespace Judge
 {
@@ -10,19 +11,14 @@ namespace Judge
     using namespace Language;
     struct Submission
     {
-        std::string user_name;
+        std::string username;
         std::string problem_title;
         std::variant<std::monostate,
-                     std::string, 
+                     std::string,
                      fs::path>
             uploade_code_file_path;
         std::vector<std::string> compile_options;
         SubID submission_id;
-        float cpu_time_limit_s;
-        float cpu_extra_time_s;
-        float wall_time_limit_s;
-        int memory_limit_kb;
-        int stack_limit_kb;
         LangID language_id;
     };
 }

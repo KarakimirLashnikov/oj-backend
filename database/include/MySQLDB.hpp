@@ -9,6 +9,7 @@ namespace MySQLDB
     {
     public:
         Database(std::string_view host
+                , uint16_t port
                 , std::string_view username
                 , std::string_view password
                 , std::string_view database);
@@ -23,5 +24,6 @@ namespace MySQLDB
         std::string m_UserName;
         std::string m_Password;
         std::string m_Database;
+        uint16_t m_Port;
     };
 }

@@ -21,35 +21,41 @@ namespace OJApp::Problems
     void create(const httplib::Request &req, httplib::Response &res)
     {
         try {
-            auto json{ njson::parse(req.body) };
+            njson json = njson::parse(req.body);
             if (!json.contains("title") || 
                 !json.contains("time_limit_s") || 
                 !json.contains("memory_limit_kb") || 
                 !json.contains("stack_limit_kb") || 
                 !json.contains("difficulty") || 
                 !json.contains("description")) {
-                    throw Exceptions::ParameterException(MISSING_PARAM, "problem", "参数缺失");
+                    throw Exceptions::ParameterException(MISSING_PARAM, "problem", "Missing parameters");
             }
+            Judge::ResourceLimits limits{
+                .time_limit_s = json.at("time_limit_s").get<float>(),
+                .extra_time_s = json.contains("extra_time_s") ? json.at("extra_time_s").get<float>() : 0.5f,
+                .wall_time_s = json.contains("wall_time_s") ? json.at("wall_time_s").get<float>() : json.at("time_limit_s").get<float>() + 1.0f,
+                .memory_limit_kb = json.at("memory_limit_kb").get<uint32_t>(),
+                .stack_limit_kb = json.at("stack_limit_kb").get<uint32_t>()
+            };
             Judge::Problem problem{
                 .title = json.at("title").get<std::string>(),
-                .time_limit_s = json.at("time_limit_s").get<float>(),
-                .memory_limit_kb = json.at("memory_limit_kb").get<uint32_t>(),
-                .stack_limit_kb = json.at("stack_limit_kb").get<uint32_t>(),
+                .description = json.at("description").get<std::string>(),
                 .level = static_cast<Core::Types::DifficultyLevel>(json.at("difficulty").get<int>()),
-                .description = json.at("description").get<std::string>()
+                .limits = std::move(limits)
             };
-
+            
             auto& cfg{ App.getConfigurator() };
             JudgeDB::ProblemWriter pw{
-                cfg.get<std::string>("judgedb", "host", "127.0.0.1"),
-                cfg.get<std::string>("judgedb", "username", "root"),
-                cfg.get<std::string>("judgedb", "password"),
-                cfg.get<std::string>("judgedb", "database", "judgedb")
+                cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                cfg.get<uint16_t>("judgedb", "PORT", 3306),
+                cfg.get<std::string>("judgedb", "USERNAME", "root"),
+                cfg.get<std::string>("judgedb", "PASSWORD"),
+                cfg.get<std::string>("judgedb", "DATABASE", "judgedb")
             };
 
             pw.createProblem(problem);
             res.status = OK;
-            auto response{ njson{{"status", "success"}, {"message", problem.title + " 问题添加成功"}} };
+            auto response = njson{{"status", "success"}, {"message", problem.title + " created successfully"}};
             res.set_content(response.dump(), "application/json");
         } catch (const Exceptions::ParameterException& e) {
             res.status = BadRequest;
@@ -69,45 +75,53 @@ namespace OJApp::Problems
     void update(const httplib::Request &req, httplib::Response &res)
     {
         try {
-            auto json{ njson::parse(req.body) };
+            njson json = njson::parse(req.body);
             if (!json.contains("title") || 
                 !json.contains("time_limit_s") || 
                 !json.contains("memory_limit_kb") || 
                 !json.contains("stack_limit_kb") || 
                 !json.contains("difficulty") || 
                 !json.contains("description")) {
-                    throw Exceptions::ParameterException(MISSING_PARAM, "problem", "参数缺失");
+                    throw Exceptions::ParameterException(MISSING_PARAM, "problem", "Missing parameters");
             }
+            Judge::ResourceLimits limits{
+                .time_limit_s = json.at("time_limit_s").get<float>(),
+                .extra_time_s = json.contains("extra_time_s") ? json.at("extra_time_s").get<float>() : 0.5f,
+                .wall_time_s = json.contains("wall_time_s") ? json.at("wall_time_s").get<float>() : json.at("time_limit_s").get<float>() + 1.0f,
+                .memory_limit_kb = json.at("memory_limit_kb").get<uint32_t>(),
+                .stack_limit_kb = json.at("stack_limit_kb").get<uint32_t>()
+            };
+
             Judge::Problem problem{
                 .title = json.at("title").get<std::string>(),
-                .time_limit_s = json.at("time_limit_s").get<float>(),
-                .memory_limit_kb = json.at("memory_limit_kb").get<uint32_t>(),
-                .stack_limit_kb = json.at("stack_limit_kb").get<uint32_t>(),
+                .description = json.at("description").get<std::string>(),
                 .level = static_cast<Core::Types::DifficultyLevel>(json.at("difficulty").get<int>()),
-                .description = json.at("description").get<std::string>()
+                .limits = std::move(limits)
             };
             
             auto& cfg{ App.getConfigurator() };
             JudgeDB::ProblemInquirer pi{
-                cfg.get<std::string>("judgedb", "host", "127.0.0.1"),
-                cfg.get<std::string>("judgedb", "username", "root"),
-                cfg.get<std::string>("judgedb", "password"),
-                cfg.get<std::string>("judgedb", "database", "judgedb")
+                cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                cfg.get<uint16_t>("judgedb", "PORT", 3306),
+                cfg.get<std::string>("judgedb", "USERNAME", "root"),
+                cfg.get<std::string>("judgedb", "PASSWORD"),
+                cfg.get<std::string>("judgedb", "DATABASE", "judgedb")
             };
             if (!pi.isExist(problem.title)) {
-                throw Exceptions::ParameterException(VALUE_ERROR, "title", "问题不存在");
+                throw Exceptions::ParameterException(VALUE_ERROR, "title", "Problem " + problem.title + " does not exist");
             }
 
             JudgeDB::ProblemWriter pw{
-                cfg.get<std::string>("judgedb", "host", "127.0.0.1"),
-                cfg.get<std::string>("judgedb", "username", "root"),
-                cfg.get<std::string>("judgedb", "password"),
-                cfg.get<std::string>("judgedb", "database", "judgedb")
+                cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                cfg.get<uint16_t>("judgedb", "PORT", 3306),
+                cfg.get<std::string>("judgedb", "USERNAME", "root"),
+                cfg.get<std::string>("judgedb", "PASSWORD"),
+                cfg.get<std::string>("judgedb", "DATABASE", "judgedb")
             };
             pw.updateProblem(problem);
 
             res.status = OK;
-            auto response{ njson{{"status", "success"}, {"message", problem.title + " 问题编辑成功"}} };
+            auto response = njson{{"status", "success"}, {"message", problem.title + " updated successfully"}};
             res.set_content(response.dump(), "application/json");
         } catch (const Exceptions::ParameterException& e) {
             res.status = BadRequest;
@@ -128,22 +142,23 @@ namespace OJApp::Problems
     void uploadTestCases(const httplib::Request &req, httplib::Response &res)
     {
         try {
-            auto json{ njson::parse(req.body) };
+            njson json = njson::parse(req.body);
             if (!json.contains("problem_title") || 
                 !json.contains("test_cases")) {
-                    throw Exceptions::ParameterException(MISSING_PARAM, "problem", "参数缺失");
+                    throw Exceptions::ParameterException(MISSING_PARAM, "problem", "Missing parameters");
             }
             std::string title{ json.at("problem_title").get<std::string>() };
 
             auto& cfg{ App.getConfigurator() };
             JudgeDB::ProblemInquirer pi{
-                cfg.get<std::string>("judgedb", "host", "127.0.0.1"),
-                cfg.get<std::string>("judgedb", "username", "root"),
-                cfg.get<std::string>("judgedb", "password"),
-                cfg.get<std::string>("judgedb", "database", "judgedb")
+                cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
+                cfg.get<uint16_t>("judgedb", "PORT", 3306),
+                cfg.get<std::string>("judgedb", "USERNAME", "root"),
+                cfg.get<std::string>("judgedb", "PASSWORD"),
+                cfg.get<std::string>("judgedb", "DATABASE", "judgedb")
             };
             if (!pi.isExist(title)) {
-                throw Exceptions::ParameterException(VALUE_ERROR, "title", "问题不存在");
+                throw Exceptions::ParameterException(VALUE_ERROR, "title", "Problem " + title + " does not exist");
             }
 
             std::vector<TestCase> cases{};
@@ -157,15 +172,15 @@ namespace OJApp::Problems
                     };
                     cases.push_back(tc);
                 } catch (const std::out_of_range& e) {
-                    throw Exceptions::ParameterException(MISSING_PARAM, "one of test case fields", "测试用例信息缺失");
+                    throw Exceptions::ParameterException(MISSING_PARAM, "one of test case fields", "Missing test cases");
                 }
             }
 
             if (!App.uploadTestCases(std::move(cases), title)) {
-                throw Exceptions::makeSystemException("upload test cases failed", __FILE__, __LINE__);
+                throw Exceptions::makeSystemException("upload test cases failed");
             }
             res.status = OK;
-            auto response{ njson{{"status", "success"}, {"message", "上传测试通过"}} };
+            auto response = njson{{"status", "success"}, {"message", "Test cases successfully uploaded for " + title}};
             res.set_content(response.dump(), "application/json");
         } catch (const Exceptions::ParameterException& e) {
             res.status = BadRequest;

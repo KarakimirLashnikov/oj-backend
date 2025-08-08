@@ -20,7 +20,7 @@ int main()
         App.registryRouter<POST>("/api/submissions/submit", &submit);
         App.registryRouter<POST>("/api/problems/create",&create);
         App.registryRouter<POST>("/api/problems/update", &update);
-        App.registryRouter<POST>("/api/problems/uploadTestCases", &uploadTestCases);
+        App.registryRouter<POST>("/api/problems/upload_test_cases", &uploadTestCases);
     
         App.run("0.0.0.0", 8000);
     }

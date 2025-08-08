@@ -19,7 +19,6 @@ namespace Judge
         virtual ~CppCompiler() = default;
 
     private:
-        std::string m_GppPath;
         std::string m_CompileMessage;
     };
 }

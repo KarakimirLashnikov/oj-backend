@@ -14,6 +14,7 @@ namespace JudgeDB
     {
     public:
         explicit JudgeWriter(std::string_view host
+                            , uint16_t port
                             , std::string_view user
                             , std::string_view password
                             , std::string_view database);
@@ -23,7 +24,7 @@ namespace JudgeDB
 
         void writeJudgeResult(const Judge::JudgeResult& judge_result);
 
-        void updateSubmission(SubID sub_id, Judge::SubmissionStatus status);
+        void updateSubmission(std::string_view sub_id, Judge::SubmissionStatus status);
 
         void insertTestCases(const std::vector<TestCase>& test_cases, std::string_view problem_title);
     };

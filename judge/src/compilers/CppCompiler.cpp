@@ -2,6 +2,8 @@
 #include "Types.hpp"
 #include "FileException.hpp"
 
+static std::string GCC_COMPILER_PATH{};
+
 namespace Judge
 {
     bool CppCompiler::compile(std::string_view source_path,
@@ -14,11 +16,10 @@ namespace Judge
         this->m_CompileMessage.clear();
 
         // 查找编译器路径
-        std::string compiler{this->m_GppPath};
-        if (compiler.empty())
+        if (GCC_COMPILER_PATH.empty())
         {
-            compiler = bp::search_path("g++").string();
-            if (compiler.empty())
+            GCC_COMPILER_PATH = bp::search_path("g++").string();
+            if (GCC_COMPILER_PATH.empty())
             {
                 throw Exceptions::makeFileException(
                     "Failed to find a valid g++ compiler path", "CppCompiler::compile");
@@ -27,10 +28,10 @@ namespace Judge
 
         // 构建参数列表
         std::vector<std::string> args;
-        args.push_back(compiler);
+        args.push_back(GCC_COMPILER_PATH);
 
         // 添加基础编译选项
-        args.insert(args.end(), {"-Wall", "-Werror", "-Wextra",
+        args.insert(args.end(), {"-Wall", "-Wextra",
                                  "-o", std::string(output_path),
                                  std::string(source_path)});
         // 处理额外标志

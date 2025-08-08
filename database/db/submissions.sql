@@ -1,6 +1,6 @@
 CREATE TABLE submissions (
     id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
-    submission_id VARCHAR(37) NOT NULL UNIQUE, -- 评测提交ID
+    submission_id VARCHAR(255) NOT NULL UNIQUE, -- 评测提交ID
     user_id INT UNSIGNED NOT NULL,             -- 用户ID
     problem_id INT UNSIGNED NOT NULL,          -- 题目ID
     language VARCHAR(15) NOT NULL,             -- 编程语言

@@ -1,4 +1,5 @@
 #include "utilities/JudgeResult.hpp"
+#include "utilities/ExecutionResult.hpp"
 #include "Types.hpp"
 
 namespace Judge
@@ -21,28 +22,6 @@ namespace Judge
         case SubmissionStatus::CE: return "COMPILATION_ERROR";
         default: throw std::runtime_error("Undefined submission status.");
         }
-    }
-
-    std::string TestResult::toString() const
-    {
-        std::string result{ std::format("[\n  Status: {}\n  Runtime: {} us\n  Memory: {} KB\n  Exit Code: {}\n  Exit Signal: {}\n]\n"
-            , Judge::toString(status)
-            , duration_us
-            , memory_kb
-            , exit_code
-            , signal) };
-        return result;
-    }
-
-    TestResult::TestResult(const ExecutionResult &er)
-    {
-        this->create_at = er.create_at;
-        this->exit_at = er.finish_at;
-        this->memory_kb = er.memory_kb;
-        this->signal = er.signal;
-        this->exit_code = er.exit_code;
-        this->duration_us = er.cpu_time_us;
-        this->status = er.status;
     }
 
     void JudgeResult::setStatus()
@@ -75,9 +54,8 @@ namespace Judge
     std::string JudgeResult::toString() const
     {
         std::string str{ std::format("Problem: {}\n", this->problem_title)};
-        str.append("SubmissionId: " + boost::uuids::to_string(this->sub_id) + "\n");
+        str.append(std::string("SubmissionId: ") + this->sub_id.data() + "\n");
         str.append("Status: " + Judge::toString(this->m_Status) + "\n");
-        str.append("Duration: " + std::to_string(std::chrono::duration_cast<Millis>(this->finishAt - this->createAt).count()) + " ms\n");
         str.append("Compile Message: " + this->compile_msg + "\n");
         str.append("TestResults: ");
         for (const auto &result: this->results) {
