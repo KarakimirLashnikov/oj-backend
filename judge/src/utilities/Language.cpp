@@ -2,7 +2,7 @@
 
 namespace Judge::Language
 {
-    std::string getLanguage(LangID id)
+    std::string toString(LangID id)
     {
         switch (id)
         {

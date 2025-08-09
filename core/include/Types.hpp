@@ -21,8 +21,7 @@ namespace Core::Types
     {
         std::string stdin;
         std::string expected_output;
-        int sequence;
-        bool is_hidden = false;
+        uint32_t sequence;
     };
 
     template <typename T>

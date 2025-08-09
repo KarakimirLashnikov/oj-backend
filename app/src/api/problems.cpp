@@ -21,39 +21,6 @@ namespace OJApp::Problems
     void create(const httplib::Request &req, httplib::Response &res)
     {
         try {
-            njson json = njson::parse(req.body);
-            if (!json.contains("title") || 
-                !json.contains("time_limit_s") || 
-                !json.contains("memory_limit_kb") || 
-                !json.contains("stack_limit_kb") || 
-                !json.contains("difficulty") || 
-                !json.contains("description")) {
-                    throw Exceptions::ParameterException(MISSING_PARAM, "problem", "Missing parameters");
-            }
-            Judge::ResourceLimits limits{
-                .time_limit_s = json.at("time_limit_s").get<float>(),
-                .extra_time_s = json.contains("extra_time_s") ? json.at("extra_time_s").get<float>() : 0.5f,
-                .wall_time_s = json.contains("wall_time_s") ? json.at("wall_time_s").get<float>() : json.at("time_limit_s").get<float>() + 1.0f,
-                .memory_limit_kb = json.at("memory_limit_kb").get<uint32_t>(),
-                .stack_limit_kb = json.at("stack_limit_kb").get<uint32_t>()
-            };
-            Judge::Problem problem{
-                .title = json.at("title").get<std::string>(),
-                .description = json.at("description").get<std::string>(),
-                .level = static_cast<Core::Types::DifficultyLevel>(json.at("difficulty").get<int>()),
-                .limits = std::move(limits)
-            };
-            
-            auto& cfg{ App.getConfigurator() };
-            JudgeDB::ProblemWriter pw{
-                cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
-                cfg.get<uint16_t>("judgedb", "PORT", 3306),
-                cfg.get<std::string>("judgedb", "USERNAME", "root"),
-                cfg.get<std::string>("judgedb", "PASSWORD"),
-                cfg.get<std::string>("judgedb", "DATABASE", "judgedb")
-            };
-
-            pw.createProblem(problem);
             res.status = OK;
             auto response = njson{{"status", "success"}, {"message", problem.title + " created successfully"}};
             res.set_content(response.dump(), "application/json");

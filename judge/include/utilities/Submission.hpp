@@ -13,12 +13,8 @@ namespace Judge
     {
         std::string username;
         std::string problem_title;
-        std::variant<std::monostate,
-                     std::string,
-                     fs::path>
-            uploade_code_file_path;
-        std::vector<std::string> compile_options;
-        SubID submission_id;
+        std::string source_code;
+        std::string submission_id;
         LangID language_id;
     };
 }

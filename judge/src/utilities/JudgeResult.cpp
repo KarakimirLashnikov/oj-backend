@@ -24,6 +24,11 @@ namespace Judge
         }
     }
 
+    JudgeResult::JudgeResult(std::string_view title, std::string_view sid)
+        : problem_title{ title.data() }
+        , sub_id{ sid.data() }
+    {}
+
     void JudgeResult::setStatus()
     {
         if (this->results.empty()) {

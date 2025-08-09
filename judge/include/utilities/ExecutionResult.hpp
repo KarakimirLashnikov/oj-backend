@@ -35,8 +35,6 @@ namespace Judge
 
     struct TestResult
     {
-        TimeStamp create_at{};
-        TimeStamp exit_at{};
         uint64_t duration_us{0};
         int exit_code{-1};
         int memory_kb{-1};

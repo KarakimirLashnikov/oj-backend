@@ -1,16 +1,16 @@
 #pragma once
 #include "actuators/Actuator.hpp"
-#include "Configurator.hpp"
 
 namespace Judge
 {
-    class CppActuator : public Actuator
+    class PythonActuator : public Actuator
     {
     public:
-        CppActuator() = default;
-        virtual ~CppActuator() noexcept = default;
+        PythonActuator() = default;
+        virtual ~PythonActuator() = default;
 
     private:
+        void setupLanguageEnv() override;
         void runChildProcess(const fs::path& exe_path) override;
     };
 }

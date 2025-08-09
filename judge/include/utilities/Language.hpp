@@ -12,11 +12,7 @@ namespace Judge::Language
         PYTHON
     };
 
-    std::string getLanguage(LangID id);
+    std::string toString(LangID id);
 
     std::string getFileExtension(LangID id);
-
-    std::unique_ptr<Actuator> getActuator(LangID id);
-
-    std::unique_ptr<Compiler> getCompiler(LangID id);
 }

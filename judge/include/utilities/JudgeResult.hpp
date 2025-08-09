@@ -25,6 +25,9 @@ namespace Judge
     struct JudgeResult
     {
     public:
+
+        JudgeResult(std::string_view title, std::string_view sub_id);
+
         std::string problem_title{};
         std::string compile_msg{};
         std::vector<TestResult> results{};
