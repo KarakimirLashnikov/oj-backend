@@ -6,6 +6,7 @@
 #include "Http.hpp"
 #include "utilities/Submission.hpp"
 #include "Types.hpp"
+#include "DBTask.hpp"
 
 namespace OJApp
 {
@@ -34,8 +35,11 @@ namespace OJApp
         void run(std::string_view host, uint16_t port);
         bool submit(Judge::Submission&& submission);
         bool uploadTestCases(std::vector<TestCase>&& test_cases, std::string_view problem_title);
+        void addDBTask(Database::DBTask&& task);
 
         Core::Configurator& getConfigurator();
+        Database::DBManager& getDBManager();
+        AuthService& getAuthService();
     private:
         Application() = default;
 

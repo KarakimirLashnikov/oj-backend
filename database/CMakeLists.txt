@@ -45,8 +45,12 @@ target_include_directories(
     ${MYSQL_CONCPP_DIR}/include
 )
 
+find_package(redis++ REQUIRED CONFIG)
+
 target_link_libraries(
     DatabaseLayer 
     PRIVATE  
     mysqlcppconn
+    hiredis
+    redis++::redis++_static
 )

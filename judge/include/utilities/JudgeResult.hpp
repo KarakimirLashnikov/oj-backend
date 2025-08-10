@@ -1,6 +1,7 @@
 #pragma once
 #include "Core.hpp"
 #include "utilities/ExecutionResult.hpp"
+#include "utilities/Language.hpp"
 
 namespace Judge
 {
@@ -22,16 +23,18 @@ namespace Judge
     std::string toString(SubmissionStatus st);
 
 
+    using Judge::Language::LangID;
     struct JudgeResult
     {
     public:
 
-        JudgeResult(std::string_view title, std::string_view sub_id);
+        JudgeResult(std::string_view title, std::string_view sub_id, LangID lang_id);
 
         std::string problem_title{};
         std::string compile_msg{};
         std::vector<TestResult> results{};
         std::string sub_id{};
+        LangID language_id;
         
         void setStatus();
         

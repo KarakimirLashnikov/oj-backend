@@ -4,8 +4,6 @@
 
 namespace Judge
 {
-    using Core::Types::TimeStamp;
-
     enum class TestStatus
     {
         UNKNOWN               = BITMASK(0),

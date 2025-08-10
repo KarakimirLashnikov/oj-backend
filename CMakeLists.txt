@@ -4,6 +4,7 @@ project(OJ-BACKEND VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/config/config.ini" 
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}"
 )
@@ -23,6 +24,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/json/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/inih
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/kafel/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/jwt-cpp/include
 )
 
 add_subdirectory(app)
@@ -33,6 +35,8 @@ add_subdirectory(database)
 add_subdirectory(third_party)
 
 add_executable(oj-backend)
+
+
 
 target_precompile_headers(
     oj-backend PRIVATE
@@ -58,11 +62,13 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/database/include
 )
 
+
+
 target_link_libraries(
     oj-backend 
     PRIVATE
-    DatabaseLayer
     ThirdParty
+    DatabaseLayer
     CoreLayer 
     JudgeLayer
     AppLayer

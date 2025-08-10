@@ -23,6 +23,8 @@ static constexpr int CHILD_PIPE_INDEX{1};
 
 namespace Judge
 {
+    Core::Configurator* Actuator::s_ConfiguratorPtr{nullptr};
+
     void Actuator::initSystem(Core::Configurator &cfg)
     {
         std::call_once(::ONCE_FLAG, [&]() {  

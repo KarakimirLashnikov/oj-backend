@@ -7,6 +7,8 @@ cd third_party
 git clone git@github.com:yhirose/cpp-httplib.git
 git clone git@github.com:nlohmann/json.git
 git clone git@github.com:gabime/spdlog.git
+git clone git@github.com:sewenew/redis-plus-plus.git
+
 
 # 安装系统依赖
 sudo apt update
@@ -16,7 +18,9 @@ sudo apt install -y \
   flex bison \
   mysql-server libmysqlclient-dev \
   libmysqlcppconn-dev \
-  libsodium-dev
+  libsodium-dev \
+  redis-server \
+  libhiredis-dev
 ```
 
 ### MySQL配置说明
@@ -32,8 +36,86 @@ find_path(MYSQLCPPCONN_INCLUDE_DIR NAMES mysql_connection.h PATHS
 find_library(MYSQLCPPCONN_LIBRARY NAMES mysqlcppconn PATHS
     /usr/lib/x86_64-linux-gnu
 )
+
+if(MYSQLCPPCONN_INCLUDE_DIR AND MYSQLCPPCONN_LIBRARY)
+    message(STATUS "Found MySQL Connector/C++: ${MYSQLCPPCONN_LIBRARY}")
+    add_library(mysqlcppconn INTERFACE IMPORTED)
+    target_include_directories(mysqlcppconn INTERFACE ${MYSQLCPPCONN_INCLUDE_DIR})
+    target_link_libraries(mysqlcppconn INTERFACE ${MYSQLCPPCONN_LIBRARY})
+else()
+    message(FATAL_ERROR "MySQL Connector/C++ not found!")
+endif()
 ```
 
+### redis++配置说明
+git clone https://github.com/sewenew/redis-plus-plus.git
+cd redis-plus-plus
+mkdir build
+cd build
+
+- 配置 CMake
+cmake ..
+
+- 编译和安装
+make -j$(nproc)
+sudo make install
+
+- 通过 apt 安装的 hiredis 没有 cmake 配置文件，修改 redis++-config.cmake
+```cmake
+get_filename_component(PACKAGE_PREFIX_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../" ABSOLUTE)
+
+macro(set_and_check _var _file)
+  set(${_var} "${_file}")
+  if(NOT EXISTS "${_file}")
+    message(FATAL_ERROR "File or directory ${_file} referenced by variable ${_var} does not exist !")
+  endif()
+endmacro()
+
+macro(check_required_components _NAME)
+  foreach(comp ${${_NAME}_FIND_COMPONENTS})
+    if(NOT ${_NAME}_${comp}_FOUND)
+      if(${_NAME}_FIND_REQUIRED_${comp})
+        set(${_NAME}_FOUND FALSE)
+      endif()
+    endif()
+  endforeach()
+endmacro()
+
+# 手动查找 hiredis
+find_path(Hiredis_INCLUDE_DIR
+  NAMES hiredis.h
+  PATHS /usr/include/hiredis
+)
+
+find_library(Hiredis_LIBRARY
+  NAMES libhiredis
+  PATHS /usr/lib/x86_64-linux-gnu
+)
+
+if(Hiredis_INCLUDE_DIR AND Hiredis_LIBRARY)
+  message(STATUS "Found Hiredis: ${Hiredis_LIBRARY}")
+  # 创建 INTERFACE 库目标
+  add_library(hiredis INTERFACE IMPORTED)
+  target_include_directories(hiredis INTERFACE ${Hiredis_INCLUDE_DIR})
+  target_link_libraries(hiredis INTERFACE ${Hiredis_LIBRARY})
+else()
+  message(FATAL_ERROR "Hiredis not found! Install via: sudo apt-get install libhiredis-dev")
+endif()
+
+# 包含 redis++ 目标文件
+include("${CMAKE_CURRENT_LIST_DIR}/redis++-targets.cmake")
+
+# 修复 redis++ 目标的链接依赖
+get_target_property(OLD_LINK_LIBS redis++::redis++ INTERFACE_LINK_LIBRARIES)
+if(OLD_LINK_LIBS MATCHES "libhiredis\\.so")
+  set_target_properties(redis++::redis++ PROPERTIES
+    INTERFACE_LINK_LIBRARIES "hiredis::hiredis"
+  )
+  message(STATUS "Updated redis++ link dependencies to use hiredis::hiredis")
+endif()
+
+check_required_components(redis++)
+```
 ---
 
 ## API 文档

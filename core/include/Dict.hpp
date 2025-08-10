@@ -1,8 +1,5 @@
-#include <map>
-#include <mutex>
-#include <utility>
-#include <optional>
-#include <shared_mutex> // C++17特性，用于读写锁
+#pragma once
+#include "Core.hpp"
 
 namespace Core
 {

@@ -2,16 +2,15 @@
 
 #include "Core.hpp"
 #include "Types.hpp"
-#include "utilities/ResourceLimits.hpp"
 
-namespace Judge
+namespace Database
 {
     using Core::Types::DifficultyLevel;
-    struct Problem
+    struct ProblemInfo
     {
         std::string title;
         std::string description;
+        std::string author;
         DifficultyLevel level;
-        ResourceLimits limits;
     };
 }

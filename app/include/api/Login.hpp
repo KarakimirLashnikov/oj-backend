@@ -8,5 +8,5 @@ namespace OJApp::Login
 
     void login(const httplib::Request &req, httplib::Response &res);
 
-    void signup(const httplib::Request &req, httplib::Response &res);
+    void registry(const httplib::Request &req, httplib::Response &res);
 }

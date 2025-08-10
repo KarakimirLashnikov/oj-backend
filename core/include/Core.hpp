@@ -43,5 +43,7 @@
 #include <format>
 #include <atomic>
 #include <variant>
+#include <shared_mutex>
+#include <iomanip>
 
 #define BITMASK(x) (1ULL << (x))

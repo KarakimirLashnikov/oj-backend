@@ -12,7 +12,7 @@ namespace Core
         Queue(size_t maxItems);
 
         bool push(T &&item);
-        bool pop(T &item, Types::Millis timeout);
+        bool pop(T &item, std::chrono::milliseconds timeout);
         void shutdown();
 
     private:

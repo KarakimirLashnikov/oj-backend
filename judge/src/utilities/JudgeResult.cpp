@@ -24,9 +24,10 @@ namespace Judge
         }
     }
 
-    JudgeResult::JudgeResult(std::string_view title, std::string_view sid)
+    JudgeResult::JudgeResult(std::string_view title, std::string_view sid, LangID lang_id)
         : problem_title{ title.data() }
         , sub_id{ sid.data() }
+        , language_id{ lang_id }
     {}
 
     void JudgeResult::setStatus()

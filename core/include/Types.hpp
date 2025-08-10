@@ -4,7 +4,6 @@
 namespace Core::Types
 {
     using TimeStamp = std::chrono::time_point<std::chrono::steady_clock>;
-    using Millis = std::chrono::milliseconds;
     using SubID = boost::uuids::random_generator_pure::result_type;
     using StatusCode = std::uint8_t;
 
@@ -19,7 +18,7 @@ namespace Core::Types
 
     struct TestCase
     {
-        std::string stdin;
+        std::string stdin_data;
         std::string expected_output;
         uint32_t sequence;
     };
@@ -31,6 +30,7 @@ namespace Core::Types
                             std::is_same_v<T, bool>;
 
     std::string difficultyToString(DifficultyLevel diff);
+    DifficultyLevel stringToDifficulty(std::string_view str);
 }
 
 namespace bp = boost::process;

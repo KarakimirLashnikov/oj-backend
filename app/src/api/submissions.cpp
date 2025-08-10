@@ -6,8 +6,6 @@
 #include "Types.hpp"
 #include "Http.hpp"
 #include "ParameterException.hpp"
-#include "judgedb/UserInquirer.hpp"
-#include "judgedb/ProblemInquirer.hpp"
 #include "SystemException.hpp"
 
 namespace OJApp::Submissions
@@ -23,22 +21,6 @@ namespace OJApp::Submissions
 
     void submit(const httplib::Request &req, httplib::Response &res)
     {
-        try {
-            res.status = OK;
-            auto response = njson{{"status", "success"}, {"message", "submission succeed"}, {"submission_id", sub_id}};
-            res.set_content(response.dump(), "application/json");
-        } catch (const Exceptions::ParameterException& e) {
-            res.status = BadRequest;
-            auto json{ njson{{"status", "failure"}, {"message", e.what()}} };
-            res.set_content(json.dump(), "application/json");
-        } catch (const Exceptions::SystemException& e) {
-            res.status = InternalServerError;
-            auto json{ njson{{"status", "failure"}, {"message", e.what()}} };
-            res.set_content(json.dump(), "application/json");
-        } catch (const std::exception& e) {
-            res.status = InternalServerError;
-            auto json{ njson{{"status", "failure"}, {"message", e.what()}} };
-            res.set_content(json.dump(), "application/json");
-        }
+
     }
 }

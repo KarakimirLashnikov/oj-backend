@@ -2,9 +2,10 @@
 #include "api/submissions.hpp"
 #include "api/Login.hpp"
 #include "api/problems.hpp"
+#include <sw/redis++/redis++.h>
 using Core::Http::POST;
 using OJApp::Login::login;
-using OJApp::Login::signup;
+using OJApp::Login::registry;
 using OJApp::Submissions::submit;
 using OJApp::Problems::create;
 using OJApp::Problems::update;
@@ -16,7 +17,7 @@ int main()
     {
         App.init("config.ini");
         App.registryRouter<POST>("/api/login/login", &login);
-        App.registryRouter<POST>("/api/login/signup", &signup);
+        App.registryRouter<POST>("/api/login/registry", &registry);
         App.registryRouter<POST>("/api/submissions/submit", &submit);
         App.registryRouter<POST>("/api/problems/create",&create);
         App.registryRouter<POST>("/api/problems/update", &update);

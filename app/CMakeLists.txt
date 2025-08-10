@@ -11,6 +11,7 @@ file(
     GLOB
     app_sources
     "src/api/*.cpp"
+    "src/authentication/*.cpp"
     "src/*.cpp"
 )
 

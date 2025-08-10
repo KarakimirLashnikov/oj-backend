@@ -20,7 +20,7 @@ namespace Core
     }
 
     template <typename T>
-    bool Queue<T>::pop(T& item, Types::Millis timeout) {
+    bool Queue<T>::pop(T& item, std::chrono::milliseconds timeout) {
         std::unique_lock<std::mutex> lock(m_Mutex);
         if (!m_NotEmptyCV.wait_for(lock, timeout, [this]() { return !m_Queue.empty() || m_Shutdown; })) {
             return false; // Timeout
