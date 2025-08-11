@@ -1,8 +1,8 @@
 CREATE TABLE judge_results (
-    id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
-    submission_id INT UNSIGNED NOT NULL,  -- 提交ID
-    test_case_id INT UNSIGNED NOT NULL,   -- 测试用例ID
-    status VARCHAR(31) NOT NULL,          -- 测试用例状态
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    submission_id BIGINT UNSIGNED NOT NULL,  -- 提交ID
+    test_case_id BIGINT UNSIGNED NOT NULL,   -- 测试用例ID
+    status VARCHAR(32) NOT NULL,          -- 测试用例状态
     cpu_time_ms INT UNSIGNED NOT NULL,    -- CPU时间(ms)
     memory_kb INT UNSIGNED NOT NULL,      -- 内存使用(KB)
     exit_code INT NOT NULL,               -- 退出代码

@@ -36,8 +36,6 @@ add_subdirectory(third_party)
 
 add_executable(oj-backend)
 
-
-
 target_precompile_headers(
     oj-backend PRIVATE
     "core/include/Core.hpp"

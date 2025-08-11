@@ -1,20 +1,19 @@
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 #include <jwt-cpp/jwt.h>
-#include "authentication/AuthService.hpp"
+#include "AuthService.hpp"
 #include "Logger.hpp"
 #include "Core.hpp"
-#include "UserInfo.hpp"
+#include "Types.hpp"
 #include "Application.hpp"
 
 namespace OJApp
 {
-
     // 构造函数实现
-    AuthService::AuthService(Database::DBManager* db_manager,
-                             Database::RedisCache* redis_cache,
-                             const std::string &secret_key,
-                             std::chrono::seconds token_expiry)
+    AuthService::AuthService(std::shared_ptr<Database::DBManager> db_manager,
+                            std::shared_ptr<Database::RedisCache> redis_cache,
+                            const std::string &secret_key,
+                            std::chrono::seconds token_expiry)
         : m_DBManagerPtr{ db_manager }
         , m_RedisCachePtr{ redis_cache }
         , m_SecretKey{ secret_key }
@@ -47,15 +46,15 @@ namespace OJApp
             const std::string password_hash = hashPassword(password, salt);
 
             // 4. 准备用户数据
-            Database::UserInfo user_info{
+            UserInfo user_info{
+                .user_uuid = boost::uuids::to_string(boost::uuids::random_generator()()),
                 .username = username,
                 .password_hash = password_hash,
                 .email = email,
-                .salt = salt,
+                .salt = salt
             };
-
-            auto task{ m_DBManagerPtr->insertUser(user_info) };
-            App.addDBTask(std::move(task));
+            
+            App.addDBTask(m_DBManagerPtr->insertUser(user_info));
 
             LOG_INFO("User registered successfully: {}", username);
             return true;
@@ -77,25 +76,24 @@ namespace OJApp
     // 用户登录实现
     bool AuthService::loginUser(const std::string &username,
                                 const std::string &password,
-                                const std::string &email,
                                 std::string &token,
                                 std::string &error_message)
     {
         try
         {
             // 1. 查询用户
-            Database::UserInfo user{ m_DBManagerPtr->queryUserInfo(username) };
-
+            LOG_INFO("Getting user by username: {}", username);
+            UserInfo user{ m_DBManagerPtr->queryUserInfoByName(username) };
+            LOG_INFO("User retrieved: {}\n{}\n{}\n{}", user.username, user.user_uuid, user.salt, user.password_hash);
             // 2. 验证密码
             if (!verifyPassword(password, user.salt, user.password_hash)) {
                 error_message = "Password is incorrect";
                 return false;
             }
-
+            LOG_INFO("Password is correct for user: {}", username);
             // 4. 生成并存储token
-            token = generateToken(user.username);
+            token = generateToken(user.user_uuid);
             m_RedisCachePtr->setToken(token, username, m_TokenExpiry);
-
             LOG_INFO("User logged in: {}", username);
             return true;
         }
@@ -120,15 +118,11 @@ namespace OJApp
         {
             // 1. 先验证JWT签名和有效期
             if (!verifyToken(token, user_id))
-            {
                 return false;
-            }
 
             // 2. 再检查Redis中是否有效
             if (!m_RedisCachePtr->isTokenValid(token))
-            {
                 return false;
-            }
 
             return true;
         }
@@ -155,27 +149,27 @@ namespace OJApp
     }
 
     // 获取当前用户实现
-    std::unique_ptr<User> AuthService::getCurrentUser(const std::string &token)
+    std::optional<UserInfo> AuthService::getCurrentUser(const std::string &token)
     {
         try
         {
-            std::string username{};
-            if (!validateToken(token, username)) {
-                return nullptr;
+            std::string user_uuid{};
+            if (!validateToken(token, user_uuid)) {
+                return std::nullopt;
             }
 
-            Database::UserInfo user_info{ m_DBManagerPtr->queryUserInfo(username) };
-            return std::make_unique<User>(std::move(user_info));
+            UserInfo user_info{ m_DBManagerPtr->queryUserInfoByUUID(user_uuid) };
+            return user_info;
         }
         catch (const sql::SQLException &e)
         {
             LOG_ERROR("Database error in getCurrentUser: {}", e.what());
-            return nullptr;
+            return std::nullopt;
         }
         catch (const std::exception &e)
         {
             LOG_ERROR("Error in getCurrentUser: {}", e.what());
-            return nullptr;
+            return std::nullopt;
         }
     }
 
@@ -211,13 +205,14 @@ namespace OJApp
         {
             ss << std::setw(2) << static_cast<int>(b);
         }
+        LOG_INFO("SHA256 hash generated: {}", ss.str());
         return ss.str();
     }
 
     // 密码验证
-    bool AuthService::verifyPassword(const std::string &password,
-                                     const std::string &salt,
-                                     const std::string &stored_hash)
+    bool AuthService::verifyPassword(std::string password,
+                                     std::string salt,
+                                     std::string stored_hash)
     {
         return hashPassword(password, salt) == stored_hash;
     }
@@ -250,7 +245,7 @@ namespace OJApp
             user_id = decoded.get_subject();
             return true;
         }
-        catch (const std::exception &e)
+        catch (const jwt::error::token_verification_exception &e)
         {
             LOG_WARN("Token verification failed: {}", e.what());
             return false;

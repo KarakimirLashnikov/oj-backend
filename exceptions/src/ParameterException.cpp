@@ -36,4 +36,14 @@ namespace Exceptions
             return "Unknown parameter error: " + paramName;
         }
     }
+
+    void checkJsonParamExist(const njson &obj, std::initializer_list<const char*> params)
+    {
+        for (auto it : params) 
+        {
+            if (!obj.contains(it)) {
+                throw ParameterException(ParameterException::ExceptionType::MISSING_PARAM, it);
+            }
+        }
+    }
 }

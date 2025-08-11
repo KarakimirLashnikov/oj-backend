@@ -7,8 +7,8 @@ using Core::Http::POST;
 using OJApp::Login::login;
 using OJApp::Login::registry;
 using OJApp::Submissions::submit;
-using OJApp::Problems::create;
-using OJApp::Problems::update;
+using OJApp::Problems::createProblem;
+using OJApp::Problems::addProblemLimit;
 using OJApp::Problems::uploadTestCases;
 
 int main()
@@ -19,8 +19,8 @@ int main()
         App.registryRouter<POST>("/api/login/login", &login);
         App.registryRouter<POST>("/api/login/registry", &registry);
         App.registryRouter<POST>("/api/submissions/submit", &submit);
-        App.registryRouter<POST>("/api/problems/create",&create);
-        App.registryRouter<POST>("/api/problems/update", &update);
+        App.registryRouter<POST>("/api/problems/create_problem",&createProblem);
+        App.registryRouter<POST>("/api/problems/add_problem_limit", &addProblemLimit);
         App.registryRouter<POST>("/api/problems/upload_test_cases", &uploadTestCases);
     
         App.run("0.0.0.0", 8000);

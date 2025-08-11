@@ -1,4 +1,5 @@
 #include "DBTask.hpp"
+#include "Logger.hpp"
 
 namespace Database
 {
@@ -9,7 +10,12 @@ namespace Database
     DBTask::~DBTask() noexcept
     {
         if (m_Handler) {
+            if (m_Handler.promise().eptr) {
+                std::rethrow_exception(m_Handler.promise().eptr);
+            }
             m_Handler.destroy();
+            std::cout << "delete db task" << std::endl;
+            LOG_INFO("DBTask has been destroyed.");
         }
     }
     DBTask::DBTask(DBTask &&other) noexcept

@@ -73,35 +73,12 @@ WHERE p.problem_title = ? AND pl.language = ?;)SQL"
         }
     }
 
-    ProblemInfo DBManager::queryProblemInfo(std::string_view problem_title)
+    UserInfo DBManager::queryUserInfoByName(std::string_view username)
     {
         try {
+            LOG_INFO("Searching user from users: {}", username.data());
             std::unique_ptr<sql::PreparedStatement> pstmt{ m_Connection->prepareStatement(
-                R"SQL(SELECT p.title, p.difficulty, p.description, u.username AS author
-FROM problems p JOIN users u ON (p.author_id = u.id)
- WHERE p.title = ?;)SQL"
-            )};
-            pstmt->setString(1, problem_title.data());
-            std::unique_ptr<sql::ResultSet> res{ pstmt->executeQuery() };
-            if (!res->next())
-                throw sql::SQLException("Unexpected error during querying from problem_info: no such problem");
-            return {
-                .title{ res->getString("title") },
-                .description{ res->getString("description") },
-                .author{ res->getString("author") },
-                .level{ Core::Types::stringToDifficulty(res->getString("difficulty").c_str()) }
-            };
-        } catch (sql::SQLException &e) {
-            LOG_ERROR("SQLException in Database::queryProblemInfo, code: {}, what: {}", e.getErrorCode(), e.what());
-            throw e;
-        }
-    }
-
-    UserInfo DBManager::queryUserInfo(std::string_view username)
-    {
-        try {
-            std::unique_ptr<sql::PreparedStatement> pstmt{ m_Connection->prepareStatement(
-                R"SQL(SELECT  username, password_hash, email, salt
+                R"SQL(SELECT user_uuid, password_hash, email, salt
 FROM users WHERE username = ?;)SQL"
             )};
             pstmt->setString(1, username.data());
@@ -109,13 +86,38 @@ FROM users WHERE username = ?;)SQL"
             if (!res->next())
                 throw sql::SQLException("Unexpected error during querying from users: no such user");
             return {
-                .username{ res->getString("username") },
+                .user_uuid{ res->getString("user_uuid") },
+                .username{ username.data() },
                 .password_hash{ res->getString("password_hash") },
                 .email{ res->getString("email") },
                 .salt{ res->getString("salt") }
             };
         } catch (sql::SQLException &e) {
             LOG_ERROR("SQLException in Database::queryUserInfo, code: {}, what: {}", e.getErrorCode(), e.what());
+            throw e;
+        }
+    }
+
+    UserInfo DBManager::queryUserInfoByUUID(std::string_view uuid)
+    {
+        try {
+            std::unique_ptr<sql::PreparedStatement> pstmt{ m_Connection->prepareStatement(
+                R"SQL(SELECT username, password_hash, email, salt
+FROM users WHERE user_uuid = ?;)SQL"
+            )};
+            pstmt->setString(1, uuid.data());
+            std::unique_ptr<sql::ResultSet> res{ pstmt->executeQuery() };
+            if (!res->next())
+                throw sql::SQLException("Unexpected error during querying from users: no such uuid");
+            return {
+                .user_uuid{ uuid.data() },
+                .username{ res->getString("username") },
+                .password_hash{ res->getString("password_hash") },
+                .email{ res->getString("email") },
+                .salt{ res->getString("salt") }
+            };
+        } catch (sql::SQLException &e) {
+            LOG_ERROR("SQLException in Database::queryUserInfoByUUID, code: {}, what: {}", e.getErrorCode(), e.what());
             throw e;
         }
     }
@@ -190,12 +192,12 @@ ON DUPLICATE KEY UPDATE time_limit_ms = ?, extra_time_ms = ?, wall_time_ms = ?, 
             m_Connection->setAutoCommit(false);  // 开始事务
             std::unique_ptr<sql::PreparedStatement> pstmt{ m_Connection->prepareStatement(
                 R"SQL(WITH p AS (SELECT id FROM problems WHERE title = ? LIMIT 1),
-s AS (SELECT id FROM users WHERE username = ? LIMIT 1) 
+s AS (SELECT id FROM users WHERE user_uuid = ? LIMIT 1) 
 INSERT INTO submissions sub SET sub.sub_strid = ?, sub.problem_id = (SELECT id FROM p), sub.user_id = (SELECT id FROM s), 
 sub.language = ?, sub.code = ?, sub.overall_status = ?;)SQL"
             ) };
             pstmt->setString(1, submission.problem_title);
-            pstmt->setString(2, submission.username);
+            pstmt->setString(2, submission.user_uuid);
             pstmt->setString(3, submission.submission_id);
             pstmt->setString(4, Judge::Language::toString(submission.language_id));
             pstmt->setString(5, submission.source_code);
@@ -264,7 +266,7 @@ sub.language = ?, sub.code = ?, sub.overall_status = ?;)SQL"
         co_return;
     }
 
-    DBTask DBManager::insertTestCases(std::vector<TestCase> test_cases, std::string problem_title)
+    DBTask DBManager::insertTestCases(std::vector<TestCase>&& test_cases, std::string problem_title)
     {
         try {
             m_Connection->setAutoCommit(false); // 开启事务
@@ -307,10 +309,10 @@ sub.language = ?, sub.code = ?, sub.overall_status = ?;)SQL"
         try {
             m_Connection->setAutoCommit(false);  // 开始事务
             std::unique_ptr<sql::PreparedStatement> pstmt{ m_Connection->prepareStatement(
-                R"SQL(WITH s AS (SELECT id FROM users WHERE username = ? LIMIT 1)
+                R"SQL(WITH s AS (SELECT id FROM users WHERE user_uuid = ? LIMIT 1)
                 INSERT INTO problems p SET p.title = ?, p.difficulty = ?, description = ?, author_id = (SELECT id FROM s);)SQL"  // 修复子查询语法
             ) };
-            pstmt->setString(1, problem.author);
+            pstmt->setString(1, problem.author_uuid);
             pstmt->setString(2, problem.title);
             pstmt->setString(3, Core::Types::difficultyToString(problem.level)); 
             pstmt->setString(4, problem.description);
@@ -334,11 +336,14 @@ sub.language = ?, sub.code = ?, sub.overall_status = ?;)SQL"
         try {
             m_Connection->setAutoCommit(false);  // 开始事务
             std::unique_ptr<sql::PreparedStatement> pstmt{ m_Connection->prepareStatement(
-                R"SQL(INSERT INTO users u SET u.username = ?, password_hash = ?, email = ?;)SQL"
+                R"SQL(INSERT INTO users (username, password_hash, email, user_uuid, salt)
+VALUES (?, ?, ?, ?, ?);)SQL"
             ) };
             pstmt->setString(1, user.username);
             pstmt->setString(2, user.password_hash);
             pstmt->setString(3, user.email);
+            pstmt->setString(4, user.user_uuid);
+            pstmt->setString(5, user.salt);
             
             if (pstmt->executeUpdate() != 1) {
                 throw sql::SQLException("Unexpected error: no affected rows or more than one row inserted");

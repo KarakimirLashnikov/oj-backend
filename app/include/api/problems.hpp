@@ -5,9 +5,9 @@
 
 namespace OJApp::Problems
 {
-    void create(const httplib::Request& req, httplib::Response& res);
+    void createProblem(const httplib::Request& req, httplib::Response& res);
 
-    void update(const httplib::Request& req, httplib::Response& res);
+    void addProblemLimit(const httplib::Request& req, httplib::Response& res);
 
     void uploadTestCases(const httplib::Request& req, httplib::Response& res);
 }

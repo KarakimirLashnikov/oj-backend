@@ -3,14 +3,13 @@
 #include "Core.hpp"
 #include "utilities/JudgeResult.hpp"
 #include "utilities/Submission.hpp"
-#include "ProblemInfo.hpp"
-#include "UserInfo.hpp"
+#include "Types.hpp"
 #include "DBTask.hpp"
 
 namespace Database
 {
 
-    using Core::Types::TestCase;
+    using namespace Core::Types;
     struct TestCasesGenerator
     {
         struct promise_type
@@ -65,9 +64,9 @@ namespace Database
 
         ResourceLimits queryProblemLimits(std::string_view problem_title, LangID language_id);
 
-        ProblemInfo queryProblemInfo(std::string_view problem_title);
+        UserInfo queryUserInfoByName(std::string_view username);
 
-        UserInfo queryUserInfo(std::string_view username);
+        UserInfo queryUserInfoByUUID(std::string_view uuid);
 
         TestCasesGenerator queryTestCases(std::string_view problem_title);
 
@@ -77,7 +76,7 @@ namespace Database
 
         DBTask insertJudgeResult(Judge::JudgeResult judge_result);
         
-        DBTask insertTestCases(std::vector<TestCase> test_cases, std::string problem_title);
+        DBTask insertTestCases(std::vector<TestCase>&& test_cases, std::string problem_title);
 
         DBTask insertProblem(ProblemInfo problem);
 

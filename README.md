@@ -88,7 +88,7 @@ find_path(Hiredis_INCLUDE_DIR
 )
 
 find_library(Hiredis_LIBRARY
-  NAMES libhiredis
+  NAMES hiredis
   PATHS /usr/lib/x86_64-linux-gnu
 )
 
@@ -127,11 +127,11 @@ check_required_components(redis++)
 **请求参数**  
 | 字段          | 类型     | 必填 | 说明                     |
 |---------------|----------|------|--------------------------|
-| username     | string   | ✓    | 用户名（需已存在）       |
+| token     | string   | ✓    | 用户令牌        |
 | problem_title | string   | ✓    | 题目名称（需已存在）     |
 | source_code   | string   | ✓    | 源代码                   |
-| language_id   | integer  | ✓    | 语言ID（对应编程语言类型）|
-| compile_options| array    | ✗    | 编译选项数组（字符串元素）|
+| language_id   | integer  | ✓    | 语言ID（1:C++/2:Python）|
+| compile_options| array    | ✗    | 编译选项数组（字符串列表）|
 
 **响应示例**  
 ```json
@@ -171,7 +171,7 @@ check_required_components(redis++)
 **响应示例**  
 ```json
 // 成功 (HTTP 200)
-{"status": "success", "message": "login succeed"}
+{"status": "success", "message": "login succeed", "token": "<jwt token>"}
 
 // 参数错误 (HTTP 400)
 {"status": "failure", "message": "username doesn't exist"}
@@ -208,45 +208,26 @@ check_required_components(redis++)
 ### 3. 题目管理 `/problems`
 #### 创建题目
 **Endpoint**  
-`POST {base_url}/api/problems/create`
+`POST {base_url}/api/problems/create_problem`
 
 **请求参数**  
 | 字段            | 类型    | 必填 | 说明                     |
 |-----------------|---------|------|--------------------------|
+| token | string  | ✓    | 用户令牌                  |
 | title           | string  | ✓    | 题目标题                 |
-| time_limit_s    | float   | ✓    | 时间限制（秒）           |
-| memory_limit_kb | integer | ✓    | 内存限制（KB）           |
-| stack_limit_kb  | integer | ✓    | 栈限制（KB）             |
-| difficulty      | integer | ✓    | 难度等级（对应DifficultyLevel枚举）|
 | description     | string  | ✓    | 题目描述                 |
-| extra_time_s    | float   | ✗    | 额外时间（秒，默认0.5）  |
-| wall_time_s     | float   | ✗    | 挂钟时间（秒，默认time_limit_s + 1.0）|
+| difficulty      | string | ✓    | 题目难度 (Beginner/Basic/Intermediate/Advanced/Expert) |
 
 **响应示例**  
 ```json
 // 成功 (HTTP 200)
-{"status": "success", "message": "<title> created successfully"}
+{"status": "success", "message": "create succeed"}
 
 // 参数错误 (HTTP 400)
 {"status": "failure", "message": "Missing parameters"}
 
 // 系统错误 (HTTP 500)
 {"status": "failure", "message": "数据库操作异常信息"}
-```
-
-#### 更新题目
-**Endpoint**  
-`POST {base_url}/api/problems/update`  
-
-**请求参数**：同创建题目接口（需确保题目已存在）
-
-**响应示例**  
-```json
-// 成功 (HTTP 200)
-{"status": "success", "message": "<title> updated successfully"}
-
-// 参数错误 (HTTP 400)
-{"status": "failure", "message": "Problem <title> does not exist"}
 ```
 
 #### 上传测试用例
@@ -256,6 +237,7 @@ check_required_components(redis++)
 **请求参数**  
 | 字段          | 类型  | 必填 | 说明                          |
 |---------------|-------|------|-------------------------------|
+| token     | string | ✓    | 用户令牌                      |
 | problem_title | string| ✓    | 关联的题目名称（需已存在）    |
 | test_cases    | array | ✓    | 测试用例数组                  |
 
@@ -264,8 +246,7 @@ check_required_components(redis++)
 {
   "stdin": "输入数据字符串",
   "expected_output": "预期输出字符串",
-  "sequence": 1,  // 排序标识（整数）
-  "hidden": false  // 可选，是否为隐藏用例（默认false）
+  "sequence": 1,  // 排序标识（整数，从1开始）
 }
 ```
 
@@ -279,4 +260,33 @@ check_required_components(redis++)
 
 // 系统错误 (HTTP 500)
 {"status": "failure", "message": "upload test cases failed"}
+```
+
+
+#### 上传题目限制
+**Endpoint**  
+`POST {base_url}/api/problems/add_problem_limit`
+
+**请求参数**  
+| 字段          | 类型  | 必填 | 说明                          |
+|---------------|-------|------|-------------------------------|
+| token     | string | ✓    | 用户令牌                      |
+| problem_title | string| ✓    | 关联的题目名称（需已存在）    |
+| language_id    | integer | ✓    | 语言ID (1:C++/2:Python)|
+| time_limit_s | float | ✓    | 时限，单位：秒               |
+| memory_limit_kb | integer | ✓    | 时限，单位：KB    |
+| extra_time_s | float | ✗    | 每个测试用额外时间，单位：秒|
+| wall_time_s | float | ✗    | 允许运行时间，单位：秒|
+
+
+**响应示例**  
+```json
+// 成功 (HTTP 200)
+{"status": "success", "message": "add limits succeed"}
+
+// 参数错误 (HTTP 400)
+{"status": "failure", "message": "Missing test cases"}
+
+// 系统错误 (HTTP 500)
+{"status": "failure", "message": "error"}
 ```

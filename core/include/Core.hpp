@@ -11,6 +11,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/lockfree/queue.hpp>
 #include <nlohmann/json.hpp>
+#include <sodium.h>
 
 
 #include <filesystem>
@@ -45,5 +46,6 @@
 #include <variant>
 #include <shared_mutex>
 #include <iomanip>
+#include <span>
 
 #define BITMASK(x) (1ULL << (x))

@@ -1,5 +1,6 @@
 #pragma once
 #include "Core.hpp"
+#include "Types.hpp"
 
 namespace Exceptions
 {
@@ -43,4 +44,6 @@ namespace Exceptions
         std::string m_paramName;
         std::string m_extraInfo;
     };
+
+    void checkJsonParamExist(const njson& obj, std::initializer_list<const char*> params);
 }

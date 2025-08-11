@@ -23,6 +23,23 @@ namespace Core::Types
         uint32_t sequence;
     };
 
+    struct ProblemInfo
+    {
+        std::string author_uuid;
+        std::string title;
+        std::string description;
+        DifficultyLevel level;
+    };
+
+    struct UserInfo
+    {
+        std::string user_uuid;
+        std::string username;
+        std::string password_hash;
+        std::string email;
+        std::string salt;
+    };
+
     template <typename T>
     concept IniSupportedType = std::is_integral_v<T> || 
                             std::is_same_v<T, std::string> ||

@@ -11,7 +11,7 @@ namespace Judge
     using namespace Language;
     struct Submission
     {
-        std::string username;
+        std::string user_uuid;
         std::string problem_title;
         std::string source_code;
         std::string submission_id;

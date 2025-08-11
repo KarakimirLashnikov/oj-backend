@@ -27,9 +27,11 @@ namespace Database
 
         void resume() noexcept;
 
-    private:
-        std::coroutine_handle<promise_type> m_Handler{ nullptr };
+        inline bool isValid() const { return m_Handler != nullptr; }
 
+        std::coroutine_handle<promise_type> m_Handler{ nullptr };
+        
+    private:
         DBTask(const DBTask&) = delete;
         DBTask& operator=(const DBTask&) = delete;
     };

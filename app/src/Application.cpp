@@ -1,3 +1,5 @@
+#include <sodium.h>
+#include <openssl/evp.h>
 #include "Application.hpp"
 #include "Types.hpp"
 #include "Configurator.hpp"
@@ -8,11 +10,12 @@
 #include "compilers/CppCompiler.hpp"
 #include "actuators/CppActuator.hpp"
 #include "FileException.hpp"
+#include "SystemException.hpp"
 #include "Queue.hpp"
 #include "Judger.hpp"
 #include "DBManager.hpp"
 #include "RedisCache.hpp"
-#include "authentication/AuthService.hpp"
+#include "AuthService.hpp"
 
 namespace OJApp
 {
@@ -23,8 +26,8 @@ namespace OJApp
     {
         std::unique_ptr<Core::ThreadPool> m_JudgerPool;
         std::unique_ptr<Core::Configurator> m_Configurator;
-        std::unique_ptr<Database::DBManager> m_DBManager;
-        std::unique_ptr<Database::RedisCache> m_RedisCache;
+        std::shared_ptr<Database::DBManager> m_DBManager;
+        std::shared_ptr<Database::RedisCache> m_RedisCache;
         std::unique_ptr<AuthService> m_AuthService;
         std::unique_ptr<Core::Queue<Database::DBTask>> m_TaskQueue;
         fs::path m_SubmissionTempDir;
@@ -41,6 +44,11 @@ namespace OJApp
         , m_TaskQueue{}
         , m_Configurator{ std::make_unique<Core::Configurator>(conf_file_path.data()) }
         {
+            if (sodium_init() == -1) 
+                throw Exceptions::makeSystemException("lib sodium init error");
+
+            OpenSSL_add_all_algorithms();
+
             size_t judger_num = m_Configurator->get<int>("application", "JUDGER_NUMBER", std::thread::hardware_concurrency());
             m_JudgerPool = std::make_unique<Core::ThreadPool>(judger_num);
             
@@ -58,9 +66,9 @@ namespace OJApp
             size_t queue_size = m_Configurator->get<size_t>("application", "DB_QUEUE_SIZE", 1024);
             m_TaskQueue = std::make_unique<Queue<Database::DBTask>>(queue_size);
             
-            std::string secret_key{ m_Configurator->get<std::string>("application", "SECRET_KEY", "") };
-            uint32_t token_expiry{ static_cast<uint32_t>(m_Configurator->get<double>("application", "TOKEN_EXPIRY", 300.0)) };
-            m_AuthService = std::make_unique<AuthService>(m_DBManager.get(), m_RedisCache.get(), secret_key, std::chrono::seconds(token_expiry));
+            std::string secret_key{ m_Configurator->get<std::string>("application", "SECRET_KEY") };
+            uint32_t token_expiry{ m_Configurator->get<uint32_t>("application", "TOKEN_EXPIRY", 600) };
+            m_AuthService = std::make_unique<AuthService>(m_DBManager, m_RedisCache, secret_key, std::chrono::seconds(token_expiry));
             
             m_SubmissionTempDir = fs::path{ m_Configurator->get<std::string>("application", "SUBMISSION_TEMP_DIR", "./submission_temp/" ) };
             if (!fs::is_directory(m_SubmissionTempDir))
@@ -152,12 +160,6 @@ namespace OJApp
         }
         judger_result.setStatus();
         return judger_result;
-    }
-
-    bool Application::uploadTestCases(std::vector<TestCase>&& test_cases, std::string_view problem_title)
-    {
-        m_ImplPtr->m_TaskQueue->push(m_ImplPtr->m_DBManager->insertTestCases(std::move(test_cases), problem_title.data()));
-        return true;
     }
 
     void Application::addDBTask(Database::DBTask &&task)

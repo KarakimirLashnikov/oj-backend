@@ -97,7 +97,7 @@ namespace Core
     };
 }
 
-#ifndef __RELEASE
+#ifndef _RELEASE
 #define LOG_TRACE(fmt, ...) \
     Core::Logger::Trace(fmt, ##__VA_ARGS__)
 #define LOG_DEBUG(fmt, ...) \

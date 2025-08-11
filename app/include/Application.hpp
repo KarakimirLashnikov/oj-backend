@@ -7,10 +7,13 @@
 #include "utilities/Submission.hpp"
 #include "Types.hpp"
 #include "DBTask.hpp"
+#include "DBManager.hpp"
+#include "RedisCache.hpp"
+#include "AuthService.hpp"
 
 namespace OJApp
 {
-    using Core::Types::TestCase;
+    using namespace Core::Types;
 
     class Application
     {
@@ -34,7 +37,6 @@ namespace OJApp
         void init(std::string_view conf_file);
         void run(std::string_view host, uint16_t port);
         bool submit(Judge::Submission&& submission);
-        bool uploadTestCases(std::vector<TestCase>&& test_cases, std::string_view problem_title);
         void addDBTask(Database::DBTask&& task);
 
         Core::Configurator& getConfigurator();

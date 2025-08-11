@@ -6,7 +6,7 @@
 #include "ParameterException.hpp"
 #include "SystemException.hpp"
 #include "DBManager.hpp"
-#include "authentication/AuthService.hpp"
+#include "AuthService.hpp"
 
 namespace OJApp::Login
 {
@@ -22,43 +22,36 @@ namespace OJApp::Login
     {
         try {
             njson j = njson::parse(req.body);
-            if (!j.contains("username") ||
-                !j.contains("password") ||
-                !j.contains("email") ||
-                !j.contains("token")) {
-                throw ParameterException(
-                    Exceptions::ParameterException::ExceptionType::MISSING_PARAM,
-                    "username/password/email");
-            }
+            LOG_INFO("req.body = {}", req.body);
+            Exceptions::checkJsonParamExist(j, {"username", "password"});
             AuthService& auth_service{ App.getAuthService() };
-            std::string error_msg{}, token{ j["token"]};
-            if (auth_service.loginUser(j["username"], j["password"], j["email"], token, error_msg)) {
+            std::string error_msg{}, token{};
+            if (auth_service.loginUser(j.at("username").get<std::string>(), j.at("password").get<std::string>(), token, error_msg)) {
                 res.status = OK;
-                njson res_content = njson{{"status", "success"}};
+                njson res_content = njson{{"status", "success"}, {"message", "login succeed"}, {"token", token}};
                 res.set_content(res_content.dump(), "application/json");
                 return;
             }
 
             res.status = BadRequest;
-            njson res_content = njson{{"status", "failed"}, {"message", error_msg}, {"token", token}};
+            njson res_content = njson{{"status", "failure"}, {"message", error_msg}};
             res.set_content(res_content.dump(), "application/json");
 
         } catch (const Exceptions::ParameterException &e) {
             LOG_INFO("Login Request ParameterError: {}", e.what());
             res.status = BadRequest;
-            njson res_content = njson{{"status", "failed"}, {"message", e.what()}};
+            njson res_content = njson{{"status", "failure"}, {"message", e.what()}};
             res.set_content(res_content.dump(), "application/json");
         } catch (const sql::SQLException &e) {
             LOG_INFO("Database error during login: {}", e.what());
             res.status = InternalServerError;
-            njson res_content = njson{{"status", "failed"},
-                                      {"message", e.what()},
-                                      {"code", e.getErrorCode()}};
+            njson res_content = njson{{"status", "failure"},
+                                      {"message", e.what()}};
             res.set_content(res_content.dump(), "application/json");
-        } catch (const std::exception &e) {
-            LOG_INFO("Login failed: {}", e.what());
+        } catch (const Exceptions::SystemException &e) {
+            LOG_INFO("System error during login: {}", e.what());
             res.status = BadRequest;
-            njson res_content = njson{{"status", "failed"}, {"message", e.what()}};
+            njson res_content = njson{{"status", "failure"}, {"message", e.what()}};
             res.set_content(res_content.dump(), "application/json");
         }
     }
@@ -67,41 +60,34 @@ namespace OJApp::Login
     {
         try {
             njson j = njson::parse(req.body);
-            if (!j.contains("username") ||
-                !j.contains("password") ||
-                !j.contains("email")) {
-                    throw ParameterException(
-                    Exceptions::ParameterException::ExceptionType::MISSING_PARAM,
-                    "username/password/email");
-            }
+            Exceptions::checkJsonParamExist(j, {"username", "password", "email"});
             AuthService& auth_service{ App.getAuthService() };
             std::string error_msg{};
             if (auth_service.registerUser(j["username"], j["password"], j["email"], error_msg)) {
                 res.status = OK;
-                njson res_content = njson{{"status", "success"}};
+                njson res_content = njson{{"status", "success"}, {"message", "registered succeed"}};
                 res.set_content(res_content.dump(), "application/json");
                 return;
             }
             
             res.status = BadRequest;
-            njson res_content = njson{{"status", "failed"}, {"message", error_msg}};
+            njson res_content = njson{{"status", "failure"}, {"message", error_msg}};
             res.set_content(res_content.dump(), "application/json");
         } catch (const Exceptions::ParameterException &e) {
             LOG_INFO("Signup Request ParameterError: {}", e.what());
             res.status = BadRequest;
-            njson res_content = njson{{"status", "failed"}, {"message", e.what()}};
+            njson res_content = njson{{"status", "failure"}, {"message", e.what()}};
             res.set_content(res_content.dump(), "application/json");
         } catch (const sql::SQLException &e) {
             LOG_ERROR("Database error during registry: {}", e.what());
             res.status = InternalServerError;
-            njson res_content = njson{{"status", "failed"},
-                                      {"message", e.what()},
-                                      {"code", e.getErrorCode()}};
+            njson res_content = njson{{"status", "failure"},
+                                      {"message", e.what()}};
             res.set_content(res_content.dump(), "application/json");
-        } catch (const std::exception &e) {
-            LOG_INFO("Signup error: {}", e.what());
+        } catch (const Exceptions::SystemException &e) {
+            LOG_INFO("System error during registry: {}", e.what());
             res.status = BadRequest;
-            njson res_content = njson{{"status", "failed"}, {"message", e.what()}};
+            njson res_content = njson{{"status", "failure"}, {"message", e.what()}};
             res.set_content(res_content.dump(), "application/json");
         }
     }
