@@ -2,13 +2,10 @@
 #include <httplib.h>
 #include "Logger.hpp"
 #include "Configurator.hpp"
-#include "Core.hpp"
 #include "Http.hpp"
-#include "utilities/Submission.hpp"
 #include "Types.hpp"
-#include "DBTask.hpp"
+#include "RedisManager.hpp"
 #include "DBManager.hpp"
-#include "RedisCache.hpp"
 #include "AuthService.hpp"
 
 namespace OJApp
@@ -36,16 +33,15 @@ namespace OJApp
 
         void init(std::string_view conf_file);
         void run(std::string_view host, uint16_t port);
-        bool submit(Judge::Submission&& submission);
-        void addDBTask(Database::DBTask&& task);
-
+        
         Core::Configurator& getConfigurator();
-        Database::DBManager& getDBManager();
+        DBManager& getDBManager();
+        RedisManager& getRedisManager();
         AuthService& getAuthService();
+
+        void processDbOperateEvent(std::string channel, std::string msg);
     private:
         Application() = default;
-
-        Judge::JudgeResult processSubmission(const Judge::Submission& sub);
 
     private:
         struct Impl;

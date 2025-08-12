@@ -1,52 +1,29 @@
 #pragma once
 #include "Types.hpp"
-#include "DBManager.hpp"
-#include "RedisCache.hpp"
+#include "Configurator.hpp"
 
 namespace OJApp
 {
-    using namespace Core::Types;
+    using Core::Types::UserInfo;
+    
     class AuthService
     {
-
     public:
-        AuthService(std::shared_ptr<Database::DBManager> db_manager,
-                    std::shared_ptr<Database::RedisCache> redis_cache,
-                    const std::string &secret_key,
-                    std::chrono::seconds token_expiry);
-        ~AuthService() = default;
+        AuthService(Core::Configurator& cfg);
 
-        // 注册新用户
-        bool registerUser(const std::string &username, const std::string &email,
-                           const std::string &password, std::string &error_message);
+        bool registryService(UserInfo info);
 
-        // 用户登录并获取token
-        bool loginUser(const std::string &username, const std::string &password,
-                        std::string &token, std::string &error_message);
-
-        // 验证token并获取用户ID
-        bool validateToken(const std::string &token, std::string &user_id);
-
-        // 登出使token失效
-        bool logoutUser(const std::string &token);
-
-        // 获取当前登录用户信息
-        std::optional<UserInfo> getCurrentUser(const std::string &token);
+        bool queryUserNameExist(std::string_view name);
 
     private:
-        // 密码哈希相关
-        std::string generateSalt();
-        std::string hashPassword(const std::string &password, const std::string &salt);
-        bool verifyPassword(std::string password, std::string salt, std::string stored_hash);
+        std::optional<std::string> generateUserToken(std::string_view user_id);
 
-        // Token相关
-        std::string generateToken(const std::string &user_id);
-        bool verifyToken(const std::string &token, std::string &user_id);
+        std::optional<std::string> hashPassword(std::string_view pwd);
+
+        bool verifyPassword(std::string_view password, std::string_view hash);
 
     private:
-        std::shared_ptr<Database::DBManager> m_DBManagerPtr;
-        std::shared_ptr<Database::RedisCache> m_RedisCachePtr;
         std::string m_SecretKey;
-        std::chrono::seconds m_TokenExpiry;
+        std::chrono::seconds m_ExpireSec;
     };
 }

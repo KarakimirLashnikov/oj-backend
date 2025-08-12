@@ -37,7 +37,6 @@ namespace Core::Types
         std::string username;
         std::string password_hash;
         std::string email;
-        std::string salt;
     };
 
     template <typename T>

@@ -7,29 +7,29 @@
 #include "FileWriter.hpp"
 #include "utilities/JudgeResult.hpp"
 #include "utilities/Language.hpp"
-#include "compilers/CppCompiler.hpp"
-#include "actuators/CppActuator.hpp"
 #include "FileException.hpp"
 #include "SystemException.hpp"
 #include "Queue.hpp"
 #include "Judger.hpp"
 #include "DBManager.hpp"
-#include "RedisCache.hpp"
+#include "RedisManager.hpp"
 #include "AuthService.hpp"
 
 namespace OJApp
 {
     std::unique_ptr<Application> Application::s_AppPtr{ nullptr };
 
+    struct Map{};
+
     using Core::Queue;
     struct Application::Impl
     {
         std::unique_ptr<Core::ThreadPool> m_JudgerPool;
         std::unique_ptr<Core::Configurator> m_Configurator;
-        std::shared_ptr<Database::DBManager> m_DBManager;
-        std::shared_ptr<Database::RedisCache> m_RedisCache;
+        std::unique_ptr<DBManager> m_DBManager;
+        std::unique_ptr<RedisManager> m_RedisManager;
+        std::unique_ptr<sw::redis::Subscriber> m_DbOpSubscriber;
         std::unique_ptr<AuthService> m_AuthService;
-        std::unique_ptr<Core::Queue<Database::DBTask>> m_TaskQueue;
         fs::path m_SubmissionTempDir;
         std::atomic<bool> m_ShouldExit{ false };
 
@@ -37,38 +37,39 @@ namespace OJApp
 
         Impl(std::string_view conf_file_path)
         : m_JudgerPool{ nullptr }
-        , m_SubmissionTempDir{}
         , m_DBManager{}
-        , m_RedisCache{}
-        , m_AuthService{}
-        , m_TaskQueue{}
+        , m_RedisManager{}
+        , m_DbOpSubscriber{}
+        , m_SubmissionTempDir{}
         , m_Configurator{ std::make_unique<Core::Configurator>(conf_file_path.data()) }
         {
             if (sodium_init() == -1) 
                 throw Exceptions::makeSystemException("lib sodium init error");
+            LOG_INFO("lib sodium init OK");
 
             OpenSSL_add_all_algorithms();
+            LOG_INFO("OpenSSL add all algorithm OK");
 
-            size_t judger_num = m_Configurator->get<int>("application", "JUDGER_NUMBER", std::thread::hardware_concurrency());
-            m_JudgerPool = std::make_unique<Core::ThreadPool>(judger_num);
-            
-            m_DBManager = std::make_unique<Database::DBManager>(
-                m_Configurator->get<std::string>("judgedb", "HOST", "127.0.0.1"),
-                m_Configurator->get<uint16_t>("judgedb", "PORT", 3306),
-                m_Configurator->get<std::string>("judgedb", "USERNAME", "root"),
-                m_Configurator->get<std::string>("judgedb", "PASSWORD", ""),
-                m_Configurator->get<std::string>("judgedb", "DATABASE", "judgedb")
-            );
-            
-            m_RedisCache = std::make_unique<Database::RedisCache>();
-            m_RedisCache->init(*m_Configurator);
-            
-            size_t queue_size = m_Configurator->get<size_t>("application", "DB_QUEUE_SIZE", 1024);
-            m_TaskQueue = std::make_unique<Queue<Database::DBTask>>(queue_size);
-            
-            std::string secret_key{ m_Configurator->get<std::string>("application", "SECRET_KEY") };
-            uint32_t token_expiry{ m_Configurator->get<uint32_t>("application", "TOKEN_EXPIRY", 600) };
-            m_AuthService = std::make_unique<AuthService>(m_DBManager, m_RedisCache, secret_key, std::chrono::seconds(token_expiry));
+            size_t wokers_num = m_Configurator->get<int>("application", "JUDGER_NUMBER", std::thread::hardware_concurrency());
+            m_JudgerPool = std::make_unique<Core::ThreadPool>(wokers_num);
+            LOG_INFO("judger threadpool created, with {} workers", wokers_num);
+
+            m_DBManager = std::make_unique<DBManager>(*m_Configurator);
+            LOG_INFO("redis connection OK");
+
+            m_RedisManager = std::make_unique<RedisManager>(*m_Configurator);
+            LOG_INFO("redis manager create OK");
+
+            m_AuthService = std::make_unique<AuthService>(*m_Configurator);
+            LOG_INFO("auth service create OK");
+
+            m_DbOpSubscriber = std::make_unique<sw::redis::Subscriber>(m_RedisManager->getRedis()->subscriber());
+            m_DbOpSubscriber->on_message([this](const std::string& channel, const std::string& msg) {
+                App.processDbOperateEvent(channel, msg);
+            });
+            std::string channel{ m_Configurator->get<std::string>("redis", "OPERATE_CHANNEL", "db_operate_channel") };
+            m_DbOpSubscriber->subscribe(channel); // 订阅数据库操作通道
+            LOG_INFO("subscriber subscribed with topic [oj.submission.queue]");
             
             m_SubmissionTempDir = fs::path{ m_Configurator->get<std::string>("application", "SUBMISSION_TEMP_DIR", "./submission_temp/" ) };
             if (!fs::is_directory(m_SubmissionTempDir))
@@ -97,85 +98,55 @@ namespace OJApp
 
     void Application::run(std::string_view host, uint16_t port)
     {
-        m_ImplPtr->m_JudgerPool->enqueue([this](){
+        m_ImplPtr->m_JudgerPool->enqueue([this]() {
             while (!m_ImplPtr->m_ShouldExit) {
-                Database::DBTask task{};
-                if (m_ImplPtr->m_TaskQueue->pop(task, std::chrono::milliseconds(10000))) {
-                    task.resume();
+                try {
+                    // 长连接消费消息
+                    m_ImplPtr->m_DbOpSubscriber->consume();
+                } catch (const sw::redis::TimeoutError &e) {
+                    LOG_WARN("Redis timeout, retrying...");
+                    continue;  // 直接重试，不重建连接
+                } catch (const sw::redis::ClosedError &e) {
+                    LOG_ERROR("Connection closed, reconnecting...");
+                    // 重建 Subscriber（限流：每分钟最多重试 1 次）
+                    std::this_thread::sleep_for(std::chrono::seconds(60));
+                    m_ImplPtr->m_DbOpSubscriber = std::make_unique<sw::redis::Subscriber>(m_ImplPtr->m_RedisManager->getRedis()->subscriber());
+                    m_ImplPtr->m_DbOpSubscriber->subscribe("db_operate_channel");
+                } catch (const std::exception &e) {
+                    LOG_ERROR("Fatal error: {}", e.what());
+                    break;
                 }
             }
-        }); // 启动后台工作线程进行数据库操作
-
+        });
         this->m_HttpServer->listen(host.data(), port);
         m_ImplPtr->m_ShouldExit = true;
-    }
-
-    using namespace Judge::Language;
-
-    bool Application::submit(Judge::Submission &&submission)
-    {
-        fs::path source_file{ m_ImplPtr->m_SubmissionTempDir / submission.submission_id / ("main" + getFileExtension(submission.language_id))};
-        std::unique_ptr<asio::io_context> pioc{ std::make_unique<asio::io_context>() }; 
-        Core::FileWriter writer{ *pioc };
-        try {
-            writer.write(source_file, submission.source_code);
-        } catch (std::exception& e) {
-            LOG_ERROR(e.what());
-            return false;
-        }
-        submission.source_code = source_file.string();
-        m_ImplPtr->m_JudgerPool->enqueue([this, ioc = std::move(pioc), sub = std::move(submission)]() ->void {
-            if (!ioc->stopped()) {
-                ioc->run();
-            }
-            auto judge_result{ this->processSubmission(sub) };
-
-            auto db_task{ m_ImplPtr->m_DBManager->insertJudgeResult(judge_result) };
-        });
-        return true;
-    }
-    
-    Judge::JudgeResult Application::processSubmission(const Judge::Submission& sub)
-    {
-        Judge::JudgeResult judger_result{sub.problem_title, sub.submission_id, sub.language_id};
-
-        Judge::ResourceLimits limits{ m_ImplPtr->m_DBManager->queryProblemLimits(sub.problem_title, sub.language_id) };
-
-        Judge::Judger judger{ sub.language_id, sub.source_code, limits};
-        auto compile_error{ judger.getCompileError() };
-        if (compile_error.has_value()) {
-            judger_result.compile_msg = compile_error.value();
-            LOG_INFO("id: {} compile failed: {}", judger_result.sub_id, judger_result.compile_msg);
-            judger_result.setStatus();
-            return judger_result;
-        }
-
-        auto gen{ m_ImplPtr->m_DBManager->queryTestCases(sub.problem_title) };
-        while (gen.next()) {
-            auto tc{ gen.getCurrentTestCase() };
-            auto execute_result{ judger.judge(tc.stdin_data, tc.expected_output) };
-            judger_result.results.push_back(execute_result);
-            if (execute_result.status != Judge::TestStatus::ACCEPTED)
-                break;
-        }
-        judger_result.setStatus();
-        return judger_result;
-    }
-
-    void Application::addDBTask(Database::DBTask &&task)
-    {
-        m_ImplPtr->m_TaskQueue->push(std::move(task));
     }
 
     Core::Configurator& Application::getConfigurator() {
         return *(m_ImplPtr->m_Configurator);
     }
 
-    Database::DBManager& Application::getDBManager() {
+    DBManager& Application::getDBManager() {
         return *(m_ImplPtr->m_DBManager);
+    }
+
+    RedisManager& Application::getRedisManager() {
+        return *(m_ImplPtr->m_RedisManager);
     }
 
     AuthService& Application::getAuthService() {
         return *(m_ImplPtr->m_AuthService);
+    }
+
+    void Application::processDbOperateEvent(std::string channel, std::string msg) {
+        m_ImplPtr->m_JudgerPool->enqueue([this, message = std::move(msg)]->void{
+            DbOperateMessage op_msg{ DbOperateMessage::deserialize(message) };
+            if (op_msg.op_type == DbOperateMessage::DbOpType::INSERT) {
+                std::string data{ m_ImplPtr->m_RedisManager->getRedis()->get(op_msg.data_key).value() };
+                LOG_INFO("message is op_insert, key: {}, value: {}", op_msg.data_key, data);
+                m_ImplPtr->m_DBManager->insertOp(op_msg.table_name, njson::parse(data));
+                return;
+            }
+        });
     }
 }
