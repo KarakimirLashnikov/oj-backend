@@ -15,8 +15,9 @@ namespace OJApp
     {
         njson j{};
         j["op_type"] = static_cast<int>(op_type);
-        j["table_name"] = table_name;
+        j["sql"] = sql;
         j["data_key"] = data_key;
+        j["param_array"] = param_array.dump();
         return j.dump();
     }
 
@@ -25,7 +26,8 @@ namespace OJApp
         auto j = nlohmann::json::parse(json_str);
         DbOperateMessage msg;
         msg.op_type = static_cast<DbOpType>(j["op_type"].get<int>());
-        msg.table_name = j["table_name"].get<std::string>();
+        msg.sql = j["sql"].get<std::string>();
+        msg.param_array = njson::parse(j["param_array"].get<std::string>());
         msg.data_key = j["data_key"].get<std::string>();
         return msg;
     }
@@ -41,7 +43,6 @@ namespace OJApp
         opts.db = cfg.get<size_t>("redis", "DB_INDEX", 0);
         opts.connect_timeout = std::chrono::milliseconds(cfg.get<int>("redis", "CONNECT_TIMEOUT", 5000));
         opts.socket_timeout = std::chrono::milliseconds(cfg.get<int>("redis", "SOCKET_TIMEOUT", 10000));
-        opts.keep_alive = cfg.get<bool>("redis", "KEEP_ALIVE", true);
 
         {
             sw::redis::Redis testConn(opts);
@@ -69,10 +70,9 @@ namespace OJApp
         try {
             // 2. 内部序列化（用户无法直接修改传输内容）
             std::string serialized = msg.serialize();
-
             // 3. 发布到固定频道（用户无需指定频道，防止频道混乱）
-            m_Redis->publish(DB_OPERATE_CHANNEL, serialized);
-            LOG_INFO("Published db operate: {}:{}:{}", msg.table_name, msg.data_key, static_cast<int>(msg.op_type));
+            m_Redis->publish(::DB_OPERATE_CHANNEL, serialized);
+            LOG_INFO("Published db operate");
         } catch (const sw::redis::Error& e) {
             LOG_ERROR("Publish failed: {}", e.what());
             throw makeSystemException("Redis publish error");

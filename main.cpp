@@ -11,6 +11,7 @@ int main()
         App.init("config.ini");
 
         App.registryRouter<POST>("/api/auth/registry", &registry);
+        App.registryRouter<POST>("/api/auth/login", &login);
     
         App.run("0.0.0.0", 8000);
     }

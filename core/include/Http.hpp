@@ -53,4 +53,21 @@ namespace Core::Http
         ServiceUnavailable = 503,  // 服务不可用（系统繁忙）
         GatewayTimeout = 504       // 网关超时
     };
+
+    inline bool isSuccess(const ResponseStatusCode code)
+    {
+        return code >= 200 && code < 300;
+    }
+    inline bool isRedirection(const ResponseStatusCode code)
+    {
+        return code >= 300 && code < 400;
+    }
+    inline bool isClientError(const ResponseStatusCode code)
+    {
+        return code >= 400 && code < 500;
+    }
+    inline bool isServerError(const ResponseStatusCode code)
+    {
+        return code >= 500;
+    }
 }

@@ -8,30 +8,23 @@
 
 namespace Database
 {
-    class DBWorker
+    class DbWorker
     {
     public:
-        DBWorker(std::string_view host
+        DbWorker(std::string_view host
                 , uint16_t port
                 , std::string_view user
                 , std::string_view password
                 , std::string_view database
                 , size_t worker_id);
         
-        ~DBWorker();
+        ~DbWorker();
 
-        DBWorker(DBWorker&&) noexcept = default;
-        DBWorker& operator=(DBWorker&&) noexcept = default;
+        DbWorker(DbWorker&&) noexcept = default;
+        DbWorker& operator=(DbWorker&&) noexcept = default;
 
 
-        // 执行插入操作，自动处理连接异常
-        void insert(sql::PreparedStatement* pstmt);
-
-        // 执行查询操作，自动处理连接异常
-        void inquire(sql::PreparedStatement* pstmt, std::function<void(sql::ResultSet*)>&& callback);
-
-        // 创建预编译语句
-        sql::PreparedStatement* prepareStatement(const std::string& sql);
+        inline sql::Connection* getConnPtr() { return m_Connection.get(); }
 
         inline size_t workerID() const { return m_ID; }
 
@@ -41,8 +34,8 @@ namespace Database
         // 建立连接，返回是否成功
         bool connect();
 
-        DBWorker(const DBWorker&) = delete;
-        DBWorker& operator=(const DBWorker&) = delete;
+        DbWorker(const DbWorker&) = delete;
+        DbWorker& operator=(const DbWorker&) = delete;
 
     private:
         std::unique_ptr<sql::Connection> m_Connection;

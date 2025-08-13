@@ -1,4 +1,4 @@
-#include "DBPool.hpp"
+#include "DbPool.hpp"
 #include "Core.hpp"
 #include "Logger.hpp"
 
@@ -6,7 +6,7 @@ namespace rg = std::ranges;
 
 namespace Database
 {
-    DBPool::DBPool(Core::Configurator& cfg)
+    DbPool::DbPool(Core::Configurator& cfg)
     : m_Pool{}
     , m_NotBusyCV{}
     , m_Mtx{}
@@ -17,7 +17,7 @@ namespace Database
         m_Pool.reserve(size);
         
         for (size_t i = 0; i < size; ++i) {
-            auto db = std::make_shared<DBWorker>(
+            auto db = std::make_shared<DbWorker>(
                 cfg.get<std::string>("judgedb", "HOST", "127.0.0.1"),
                 cfg.get<uint16_t>("judgedb", "PORT", 3306),
                 cfg.get<std::string>("judgedb", "USERNAME", "root"),
@@ -30,7 +30,7 @@ namespace Database
         }
     }
     
-    std::shared_ptr<DBWorker> DBPool::acquire(std::chrono::seconds timeout_sec)
+    std::shared_ptr<DbWorker> DbPool::acquire(std::chrono::seconds timeout_sec)
     {
         std::unique_lock<std::mutex> lk{m_Mtx};
         
@@ -60,7 +60,7 @@ namespace Database
         return it->worker;
     }
 
-    void DBPool::returnWorker(size_t id)
+    void DbPool::returnWorker(size_t id)
     {
         std::lock_guard<std::mutex> lk{m_Mtx};
         

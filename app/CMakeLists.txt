@@ -12,6 +12,8 @@ file(
     app_sources
     "src/api/*.cpp"
     "src/authentication/*.cpp"
+    "src/dbop/*.cpp"
+    "src/dbtables/*.cpp"
     "src/*.cpp"
 )
 

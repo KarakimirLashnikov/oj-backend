@@ -2,22 +2,18 @@
 #include <sw/redis++/redis++.h>
 #include "Configurator.hpp"
 #include "Types.hpp"
+#include "dbop/DbOperation.hpp"
 
 namespace OJApp
 {
     // 特定消息结构：仅支持数据库写入相关操作
     struct DbOperateMessage
     {
-        enum DbOpType
-        {
-            INSERT, // 插入数据
-            UPDATE, // 更新数据
-            DELETE  // 删除数据
-        };
-
+        using DbOpType = DbOp::OpType;
         DbOpType op_type;       // 操作类型（必填）
-        std::string table_name; // 目标表名
+        std::string sql;        // SQL语句（必填）
         std::string data_key;   // 数据唯一键（用于Redis查询）
+        njson param_array;      // 参数
 
         // 序列化：将结构转为JSON字符串（供Redis传输）
         std::string serialize() const;
@@ -28,7 +24,7 @@ namespace OJApp
         // 验证消息合法性（检查必填字段）
         inline bool isValid() const
         {
-            return !table_name.empty() && !data_key.empty();
+            return !sql.empty() && !data_key.empty();
         }
     };
 

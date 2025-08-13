@@ -5,7 +5,7 @@
 #include "Http.hpp"
 #include "Types.hpp"
 #include "RedisManager.hpp"
-#include "DBManager.hpp"
+#include "DbManager.hpp"
 #include "AuthService.hpp"
 
 namespace OJApp
@@ -35,7 +35,7 @@ namespace OJApp
         void run(std::string_view host, uint16_t port);
         
         Core::Configurator& getConfigurator();
-        DBManager& getDBManager();
+        DbManager& getDbManager();
         RedisManager& getRedisManager();
         AuthService& getAuthService();
 

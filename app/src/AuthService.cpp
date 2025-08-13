@@ -2,9 +2,15 @@
 #include <sodium.h>
 #include "AuthService.hpp"
 #include "Application.hpp"
+#include "SystemException.hpp"
+#include "dbop/DbOpFactory.hpp"
+
 
 namespace OJApp
 {
+    using Exceptions::SystemException;
+    
+
     AuthService::AuthService(Core::Configurator &cfg)
     {
         m_ExpireSec = std::chrono::seconds{cfg.get<int>("application", "JWT_EXPIRE", 1)};        
@@ -12,43 +18,99 @@ namespace OJApp
     }
 
 
-    bool AuthService::registryService(UserInfo info)
+    ServiceInfo AuthService::registryService(UserInfo info)
     {
-        LOG_INFO("check info.username");
+        ServiceInfo sv_info{};
         if (queryUserNameExist(info.username)) {
-            LOG_INFO("username already exist!");
-            return false;
+            LOG_INFO("user exist, return username exist response");
+            sv_info.message = "username exist, please try other name";
+            sv_info.status = Conflict;
+            return sv_info;
         }
-        LOG_INFO("generate user pwd hash");
+
         auto pwd_hash{ hashPassword(info.password_hash) };
         if (!pwd_hash.has_value()) {
-            LOG_ERROR("hashPassword error");
-            return false;
+            LOG_INFO("hashPassword failed");
+            throw SystemException{ InternalServerError, "hashPassword error" };
         }
-        LOG_INFO("start to registry an user (username: {})", info.username);
+
+        info.password_hash = *pwd_hash;
         info.user_uuid = boost::uuids::to_string(boost::uuids::random_generator()());
-        njson data = njson{ {"username", info.username}, {"password_hash", *pwd_hash}, {"email", info.email}, {"user_uuid", info.user_uuid} };
+
+        njson data = info.toJson();
         DbOperateMessage msg {
             .op_type = DbOperateMessage::DbOpType::INSERT,
-            .table_name = "users",
-            .data_key = info.username
+            .sql = R"SQL(INSERT INTO users (user_uuid,username,password_hash,email) VALUES(?,?,?,?))SQL",
+            .data_key = info.username,
+            .param_array = {data["user_uuid"], data["username"], data["password_hash"], data["email"]}
         };
-        LOG_INFO("start to insert a new user into redis, data: {}", data.dump());
         // 缓存到redis并发布
         App.getRedisManager().getRedis()->set(msg.data_key, data.dump(), std::chrono::milliseconds{m_ExpireSec});
         App.getRedisManager().publishDbOperate(msg);
-        LOG_INFO("new user {} insert into redis, and publish message to db operate channel", info.username);
-        return true;
+
+        sv_info.message = "registration success";
+        sv_info.status = Created;
+        return sv_info;
+    }
+
+    using DbOp::makeDbOp;
+    ServiceInfo AuthService::loginService(UserInfo info, std::string &token)
+    {
+        ServiceInfo sv_info{};
+        LOG_INFO("start to query user {} from db", info.username);
+        if (!queryUserNameExist(info.username)) {
+            LOG_INFO("user does not exist");
+            sv_info.message = "username does not exist, please register firstly";
+            sv_info.status = NotFound;
+            return sv_info;
+        }
+        std::string password = info.password_hash;
+        auto data_str = App.getRedisManager().getRedis()->get(info.username);
+        if (!data_str.has_value()) {
+            njson params = njson::array();
+            params.push_back(info.username);
+            auto db_op = makeDbOp(DbOp::OpType::QUERY, R"SQL(SELECT password_hash FROM users WHERE username = ?)SQL", params);
+            App.getDbManager().execute(db_op.get());
+            auto query_op = dynamic_cast<DbOp::DbQueryOp *>(db_op.get());
+            njson result = query_op->getResult();
+            info.password_hash = result.front().at("password_hash").get<std::string>();
+        } else {
+            info.fromJson(njson::parse(*data_str));
+        }
+
+        if (!verifyPassword(password, info.password_hash)) {
+            LOG_INFO("verifyPassword failed");
+            sv_info.message = "password error";
+            sv_info.status = Unauthorized;
+            return sv_info;
+        }
+
+        token = generateUserToken(info.user_uuid).value_or("");
+        if (token.empty()) {
+            LOG_INFO("generateUserToken failed");
+            throw SystemException{ InternalServerError, "generateToken error" };
+        }
+
+        App.getRedisManager().getRedis()->set(info.username, token, std::chrono::milliseconds{m_ExpireSec});
+
+        sv_info.status = OK;
+        sv_info.message = "login success";
+        return sv_info;
     }
 
     bool AuthService::queryUserNameExist(std::string_view name)
     {
         LOG_INFO("search user with username: {}", name);
-        if (App.getRedisManager().getRedis()->exists(std::string(name)) == 1)
+        if (redisExist(name))
             return true;
         LOG_INFO("not exist user, try to search from db");
-        auto info = App.getDBManager().queryUserInfoByName(name);
-        if (info->rowsCount() != 0)
+
+        auto db_op = DbOp::makeDbOp(DbOp::OpType::QUERY , R"SQL(SELECT * FROM users WHERE username = ?)SQL", {name.data()});
+        App.getDbManager().execute(db_op.get());
+        auto query_op = dynamic_cast<DbOp::DbQueryOp *>(db_op.get());
+        auto result = query_op->getResult();
+
+        if (result.size() > 0)
             return true;
         LOG_INFO("queryUserInfoByName return null result");
         return false;
@@ -62,7 +124,7 @@ namespace OJApp
             auto token_builder = jwt::create()
                                      .set_issuer("oj-system")                                            // 签发者（可选）
                                      .set_subject("user-auth")                                           // 主题（可选）
-                                     .set_payload_claim("user_uuid", jwt::claim(std::string(user_uuid))) // 用户ID作为载荷（payload）
+                                     .set_payload_claim("username", jwt::claim(std::string(user_uuid)))  // 用户作为载荷（payload）
                                      .set_issued_at(std::chrono::system_clock::now())                    // 签发时间
                                      .set_expires_at(std::chrono::system_clock::now() + m_ExpireSec);    // 过期时间
             // 使用HS256算法和密钥签名
@@ -108,5 +170,10 @@ namespace OJApp
             password.size()
         );
         return result == 0;
+    }
+
+    bool AuthService::redisExist(std::string_view key) const
+    {
+        return App.getRedisManager().getRedis()->exists(key) == 1;
     }
 }

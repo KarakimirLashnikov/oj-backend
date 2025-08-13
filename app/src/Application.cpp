@@ -9,24 +9,21 @@
 #include "utilities/Language.hpp"
 #include "FileException.hpp"
 #include "SystemException.hpp"
-#include "Queue.hpp"
 #include "Judger.hpp"
-#include "DBManager.hpp"
+#include "DbManager.hpp"
 #include "RedisManager.hpp"
 #include "AuthService.hpp"
+#include "dbop/DbOpFactory.hpp"
 
 namespace OJApp
 {
     std::unique_ptr<Application> Application::s_AppPtr{ nullptr };
 
-    struct Map{};
-
-    using Core::Queue;
     struct Application::Impl
     {
         std::unique_ptr<Core::ThreadPool> m_JudgerPool;
         std::unique_ptr<Core::Configurator> m_Configurator;
-        std::unique_ptr<DBManager> m_DBManager;
+        std::unique_ptr<DbManager> m_DbManager;
         std::unique_ptr<RedisManager> m_RedisManager;
         std::unique_ptr<sw::redis::Subscriber> m_DbOpSubscriber;
         std::unique_ptr<AuthService> m_AuthService;
@@ -37,7 +34,7 @@ namespace OJApp
 
         Impl(std::string_view conf_file_path)
         : m_JudgerPool{ nullptr }
-        , m_DBManager{}
+        , m_DbManager{}
         , m_RedisManager{}
         , m_DbOpSubscriber{}
         , m_SubmissionTempDir{}
@@ -54,7 +51,7 @@ namespace OJApp
             m_JudgerPool = std::make_unique<Core::ThreadPool>(wokers_num);
             LOG_INFO("judger threadpool created, with {} workers", wokers_num);
 
-            m_DBManager = std::make_unique<DBManager>(*m_Configurator);
+            m_DbManager = std::make_unique<DbManager>(*m_Configurator);
             LOG_INFO("redis connection OK");
 
             m_RedisManager = std::make_unique<RedisManager>(*m_Configurator);
@@ -102,6 +99,7 @@ namespace OJApp
             while (!m_ImplPtr->m_ShouldExit) {
                 try {
                     // 长连接消费消息
+                    LOG_INFO("Start polling...");
                     m_ImplPtr->m_DbOpSubscriber->consume();
                 } catch (const sw::redis::TimeoutError &e) {
                     LOG_WARN("Redis timeout, retrying...");
@@ -110,7 +108,8 @@ namespace OJApp
                     LOG_ERROR("Connection closed, reconnecting...");
                     // 重建 Subscriber（限流：每分钟最多重试 1 次）
                     std::this_thread::sleep_for(std::chrono::seconds(60));
-                    m_ImplPtr->m_DbOpSubscriber = std::make_unique<sw::redis::Subscriber>(m_ImplPtr->m_RedisManager->getRedis()->subscriber());
+                    m_ImplPtr->m_DbOpSubscriber = std::make_unique<sw::redis::Subscriber>(
+                        m_ImplPtr->m_RedisManager->getRedis()->subscriber());
                     m_ImplPtr->m_DbOpSubscriber->subscribe("db_operate_channel");
                 } catch (const std::exception &e) {
                     LOG_ERROR("Fatal error: {}", e.what());
@@ -126,8 +125,8 @@ namespace OJApp
         return *(m_ImplPtr->m_Configurator);
     }
 
-    DBManager& Application::getDBManager() {
-        return *(m_ImplPtr->m_DBManager);
+    DbManager& Application::getDbManager() {
+        return *(m_ImplPtr->m_DbManager);
     }
 
     RedisManager& Application::getRedisManager() {
@@ -138,15 +137,15 @@ namespace OJApp
         return *(m_ImplPtr->m_AuthService);
     }
 
+    using DbOp::makeDbOp;
     void Application::processDbOperateEvent(std::string channel, std::string msg) {
-        m_ImplPtr->m_JudgerPool->enqueue([this, message = std::move(msg)]->void{
-            DbOperateMessage op_msg{ DbOperateMessage::deserialize(message) };
-            if (op_msg.op_type == DbOperateMessage::DbOpType::INSERT) {
-                std::string data{ m_ImplPtr->m_RedisManager->getRedis()->get(op_msg.data_key).value() };
-                LOG_INFO("message is op_insert, key: {}, value: {}", op_msg.data_key, data);
-                m_ImplPtr->m_DBManager->insertOp(op_msg.table_name, njson::parse(data));
-                return;
+        m_ImplPtr->m_JudgerPool->enqueue([this, message = msg]()->void {
+                LOG_INFO("db_op message receive, message = {}", message);
+                DbOperateMessage op_msg{ DbOperateMessage::deserialize(message) };
+                auto db_op = makeDbOp(op_msg.op_type, std::move(op_msg.sql), std::move(op_msg.param_array));
+                m_ImplPtr->m_DbManager->execute(db_op.get());
+                LOG_INFO("db_op message done, message = {}", message);
             }
-        });
+        );
     }
 }
