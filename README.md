@@ -9,10 +9,10 @@ git clone git@github.com:nlohmann/json.git
 git clone git@github.com:gabime/spdlog.git
 git clone git@github.com:sewenew/redis-plus-plus.git
 
-
 # 安装系统依赖
 sudo apt update
 sudo apt install -y \
+  pkg-config \
   libboost-all-dev \
   libseccomp-dev libseccomp2 seccomp \
   flex bison \
@@ -48,7 +48,75 @@ endif()
 ```
 
 ### redis++配置说明
-git clone https://github.com/sewenew/redis-plus-plus.git
+- 通过 apt 安装的 hiredis 没有 cmake 配置文件，修改 redis-plus-plus 中的 redis++-config.cmake.in
+```cmake
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# 解析依赖列表（原逻辑）
+string(REPLACE "," ";" REDIS_PLUS_PLUS_DEPENDS_LIST @REDIS_PLUS_PLUS_DEPENDS@)
+
+# 手动处理hiredis和hiredis_ssl，其他依赖仍用find_dependency
+foreach(REDIS_PLUS_PLUS_DEP ${REDIS_PLUS_PLUS_DEPENDS_LIST})
+    # 处理hiredis（无CMake配置文件，手动查找）
+    if(REDIS_PLUS_PLUS_DEP STREQUAL "hiredis")
+        # 查找hiredis头文件
+        find_path(HIREDIS_INCLUDE_DIR
+            NAMES hiredis.h
+            PATHS /usr/include/hiredis
+            DOC "hiredis header directory"
+        )
+        # 查找hiredis库文件
+        find_library(HIREDIS_LIBRARY
+            NAMES hiredis
+            PATHS /usr/lib/x86_64-linux-gnu
+            DOC "hiredis library file"
+        )
+        # 验证查找结果
+        if(NOT HIREDIS_INCLUDE_DIR OR NOT HIREDIS_LIBRARY)
+            message(FATAL_ERROR "hiredis not found. Install via: sudo apt install libhiredis-dev")
+        endif()
+        # 设置hiredis变量（模拟CMake配置文件输出）
+        set(hiredis_FOUND TRUE)
+        set(hiredis_INCLUDE_DIRS ${HIREDIS_INCLUDE_DIR})
+        set(hiredis_LIBRARIES ${HIREDIS_LIBRARY})
+
+    # 处理hiredis_ssl（TLS支持，同样手动查找）
+    elseif(REDIS_PLUS_PLUS_DEP STREQUAL "hiredis_ssl")
+        # 查找hiredis_ssl头文件
+        find_path(HIREDIS_SSL_INCLUDE_DIR
+            NAMES ssl.h
+            PATHS /usr/includehiredis
+            DOC "hiredis_ssl header directory"
+        )
+        # 查找hiredis_ssl库文件
+        find_library(HIREDIS_SSL_LIBRARY
+            NAMES hiredis_ssl
+            PATHS /usr/lib/x86_64-linux-gnu
+            DOC "hiredis_ssl library file"
+        )
+        # 验证查找结果
+        if(NOT HIREDIS_SSL_INCLUDE_DIR OR NOT HIREDIS_SSL_LIBRARY)
+            message(FATAL_ERROR "hiredis_ssl not found. Install libhiredis-dev with SSL support.")
+        endif()
+        # 设置hiredis_ssl变量
+        set(hiredis_ssl_FOUND TRUE)
+        set(hiredis_ssl_INCLUDE_DIRS ${HIREDIS_SSL_INCLUDE_DIR})
+        set(hiredis_ssl_LIBRARIES ${HIREDIS_SSL_LIBRARY})
+
+    # 其他依赖（如有）仍使用find_dependency
+    else()
+        find_dependency(${REDIS_PLUS_PLUS_DEP} REQUIRED)
+    endif()
+endforeach()
+
+# 引入目标文件（原逻辑保留）
+include("${CMAKE_CURRENT_LIST_DIR}/redis++-targets.cmake")
+
+check_required_components(redis++)
+```
+- 构建
 cd redis-plus-plus
 mkdir build
 cd build
@@ -59,63 +127,6 @@ cmake ..
 - 编译和安装
 make -j$(nproc)
 sudo make install
-
-- 通过 apt 安装的 hiredis 没有 cmake 配置文件，修改 redis++-config.cmake
-```cmake
-get_filename_component(PACKAGE_PREFIX_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../" ABSOLUTE)
-
-macro(set_and_check _var _file)
-  set(${_var} "${_file}")
-  if(NOT EXISTS "${_file}")
-    message(FATAL_ERROR "File or directory ${_file} referenced by variable ${_var} does not exist !")
-  endif()
-endmacro()
-
-macro(check_required_components _NAME)
-  foreach(comp ${${_NAME}_FIND_COMPONENTS})
-    if(NOT ${_NAME}_${comp}_FOUND)
-      if(${_NAME}_FIND_REQUIRED_${comp})
-        set(${_NAME}_FOUND FALSE)
-      endif()
-    endif()
-  endforeach()
-endmacro()
-
-# 手动查找 hiredis
-find_path(Hiredis_INCLUDE_DIR
-  NAMES hiredis.h
-  PATHS /usr/include/hiredis
-)
-
-find_library(Hiredis_LIBRARY
-  NAMES hiredis
-  PATHS /usr/lib/x86_64-linux-gnu
-)
-
-if(Hiredis_INCLUDE_DIR AND Hiredis_LIBRARY)
-  message(STATUS "Found Hiredis: ${Hiredis_LIBRARY}")
-  # 创建 INTERFACE 库目标
-  add_library(hiredis INTERFACE IMPORTED)
-  target_include_directories(hiredis INTERFACE ${Hiredis_INCLUDE_DIR})
-  target_link_libraries(hiredis INTERFACE ${Hiredis_LIBRARY})
-else()
-  message(FATAL_ERROR "Hiredis not found! Install via: sudo apt-get install libhiredis-dev")
-endif()
-
-# 包含 redis++ 目标文件
-include("${CMAKE_CURRENT_LIST_DIR}/redis++-targets.cmake")
-
-# 修复 redis++ 目标的链接依赖
-get_target_property(OLD_LINK_LIBS redis++::redis++ INTERFACE_LINK_LIBRARIES)
-if(OLD_LINK_LIBS MATCHES "libhiredis\\.so")
-  set_target_properties(redis++::redis++ PROPERTIES
-    INTERFACE_LINK_LIBRARIES "hiredis::hiredis"
-  )
-  message(STATUS "Updated redis++ link dependencies to use hiredis::hiredis")
-endif()
-
-check_required_components(redis++)
-```
 ---
 
 ## API 文档
