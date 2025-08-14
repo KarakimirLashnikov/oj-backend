@@ -17,7 +17,14 @@ namespace Core::Types
         Expert
     };
 
-    struct TestCase : public JsonSerializable
+    enum class LangID
+    {
+        UNKNOWN = 0,
+        CPP,
+        PYTHON
+    };
+
+    struct TestCaseInfo : public JsonSerializable
     {
         std::string stdin_data;
         std::string expected_output;
@@ -49,14 +56,34 @@ namespace Core::Types
         void fromJson(const njson &data) override;
     };
 
-    template <typename T>
-    concept IniSupportedType = std::is_integral_v<T> || 
-                            std::is_same_v<T, std::string> ||
-                            std::is_floating_point_v<T> ||
-                            std::is_same_v<T, bool>;
+    struct LimitsInfo : public JsonSerializable
+    {
+        float time_limit_s;
+        float extra_time_s;
+        float wall_time_s;
+        uint32_t memory_limit_kb;
+        uint32_t stack_limit_kb;
+
+        njson toJson() const override;
+        void fromJson(const njson &data) override;
+    };
+
+    struct SubmissoinInfo : public JsonSerializable
+    {
+        std::string user_uuid;
+        std::string problem_title;
+        std::string source_code;
+        std::string submission_id;
+        LangID language_id;
+
+        njson toJson() const override;
+        void fromJson(const njson &data) override;
+    };
 
     std::string difficultyToString(DifficultyLevel diff);
     DifficultyLevel stringToDifficulty(std::string_view str);
+    std::string LanguageIdtoString(LangID id);
+    std::string getFileExtension(LangID id);
 }
 
 namespace bp = boost::process;

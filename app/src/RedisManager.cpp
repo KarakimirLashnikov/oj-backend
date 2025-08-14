@@ -35,14 +35,15 @@ namespace OJApp
     RedisManager::RedisManager(Core::Configurator &cfg)
     {
         ::DB_OPERATE_CHANNEL = cfg.get<std::string>("redis", "OPERATE_CHANNEL", "db_operate_channel");
+        m_KeyTTL = std::chrono::seconds(cfg.get<int>("redis", "TTL", 600));
 
         sw::redis::ConnectionOptions opts{};
         opts.host = cfg.get<std::string>("redis", "HOST", "127.0.0.1");
         opts.port = cfg.get<uint16_t>("redis", "PORT", 6379);
         opts.password = cfg.get<std::string>("redis", "PASSWORD", "");
         opts.db = cfg.get<size_t>("redis", "DB_INDEX", 0);
-        opts.connect_timeout = std::chrono::milliseconds(cfg.get<int>("redis", "CONNECT_TIMEOUT", 5000));
-        opts.socket_timeout = std::chrono::milliseconds(cfg.get<int>("redis", "SOCKET_TIMEOUT", 10000));
+        opts.connect_timeout = std::chrono::seconds(cfg.get<int>("redis", "CONNECT_TIMEOUT", 30));
+        opts.socket_timeout = std::chrono::seconds(cfg.get<int>("redis", "SOCKET_TIMEOUT", 30));
 
         {
             sw::redis::Redis testConn(opts);
@@ -76,6 +77,67 @@ namespace OJApp
         } catch (const sw::redis::Error& e) {
             LOG_ERROR("Publish failed: {}", e.what());
             throw makeSystemException("Redis publish error");
+        }
+    }
+
+    bool RedisManager::set(const std::string& key, const std::string& value)
+    {
+        try {
+            if (m_Redis->set(key, value, m_KeyTTL)) {
+                LOG_INFO("Set data OK");
+                return true;
+            }
+            LOG_ERROR("Set failed");
+            return false;
+        } catch (const sw::redis::Error& e) {
+            LOG_ERROR("Redis Set error: {}", e.what());
+            throw makeSystemException("Redis set error");
+        }
+    }
+
+    bool RedisManager::exists(const std::string& key)
+    {
+        try {
+            if (m_Redis->exists(key)) {
+                LOG_INFO("Key exists");
+                return true;
+            }
+            LOG_INFO("Key not found");
+            return false;
+        } catch (const sw::redis::Error& e) {
+            LOG_ERROR("Check key exists error: {}", e.what());
+            throw makeSystemException("Redis exists error");
+        }
+    }
+
+    std::optional<std::string> RedisManager::get(const std::string& key)
+    {
+        try {
+            auto opt_str = m_Redis->get(key);
+            if (opt_str) {
+                LOG_INFO("get key ok");
+                return opt_str.value();
+            }
+            LOG_INFO("key not found");
+            return std::nullopt;
+        } catch (const sw::redis::Error& e) {
+            LOG_ERROR("Get key failed: {}", e.what());
+            throw makeSystemException("Redis get error");
+        }
+    }
+
+    bool RedisManager::expire(const std::string& key)
+    {
+        try {
+            if (m_Redis->expire(key, m_KeyTTL)) {
+                LOG_INFO("expire ok");
+                return true;
+            }
+            LOG_INFO("Key not found or set expire failed");
+            return false;
+        } catch (const sw::redis::Error& e) {
+            LOG_ERROR("set expire failed: {}", e.what());
+            throw makeSystemException("Redis expire error");
         }
     }
 }

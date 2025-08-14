@@ -85,7 +85,7 @@ namespace Judge
         });
     }
 
-    ExecutionResult Actuator::execute(const fs::path &exe_path, const ResourceLimits &limits, std::string_view stdin_data)
+    ExecutionResult Actuator::execute(const fs::path &exe_path, const LimitsInfo &limits, std::string_view stdin_data)
     {
         // 准备管道
         int stdin_pipe[2]{}, stdout_pipe[2]{}, stderr_pipe[2]{};
@@ -219,7 +219,7 @@ namespace Judge
                             , int stdout_pipe[2]
                             , int stderr_pipe[2]
                             , const fs::path& exe_path
-                            , const ResourceLimits& limits)
+                            , const LimitsInfo& limits)
     {
         close(stdin_pipe[CHILD_PIPE_INDEX]);
         close(stdout_pipe[FATHER_PIPE_INDEX]);
@@ -270,7 +270,7 @@ namespace Judge
         }
     }
 
-    fs::path Actuator::createCgroupForProcess(pid_t pid, const ResourceLimits &limits)
+    fs::path Actuator::createCgroupForProcess(pid_t pid, const LimitsInfo &limits)
     {
         fs::path cgroup_root = ::CGROUP_ROOT;
         std::string cgroup_name = "judge_" + std::to_string(getpid()) + "_" + std::to_string(pid);
@@ -297,7 +297,7 @@ namespace Judge
         return cgroup_path;
     }
 
-    void Actuator::setupCgroupLimits(const ResourceLimits &limits, const fs::path &cgroup_path)
+    void Actuator::setupCgroupLimits(const LimitsInfo &limits, const fs::path &cgroup_path)
     {
         // 设置CPU时间限制
         std::ofstream cpu_max_file(cgroup_path / "cpu.max");
@@ -321,7 +321,7 @@ namespace Judge
                                 int stderr_fd,
                                 const TimeStamp &start_time,
                                 ExecutionResult &result,
-                                const ResourceLimits &limits,
+                                const LimitsInfo &limits,
                                 const fs::path &cgroup_path)
     {
         // 使用poll同时监控进程退出和输出

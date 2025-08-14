@@ -5,12 +5,18 @@
 
 namespace Core
 {
+    template <typename T>
+    concept IniSupportedType = std::is_integral_v<T> || 
+                            std::is_same_v<T, std::string> ||
+                            std::is_floating_point_v<T> ||
+                            std::is_same_v<T, bool>;
+
     class Configurator
     {
     public:
         Configurator(std::string_view conf_file_path = "config.ini");
 
-        template <Types::IniSupportedType TValue>
+        template <IniSupportedType TValue>
         TValue get(std::string_view section, std::string_view key, TValue default_value = {}) const
         {
             if constexpr (std::is_integral_v<TValue>) {

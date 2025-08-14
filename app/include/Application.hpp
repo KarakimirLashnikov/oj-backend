@@ -6,7 +6,7 @@
 #include "Types.hpp"
 #include "RedisManager.hpp"
 #include "DbManager.hpp"
-#include "AuthService.hpp"
+#include "services/AuthService.hpp"
 
 namespace OJApp
 {

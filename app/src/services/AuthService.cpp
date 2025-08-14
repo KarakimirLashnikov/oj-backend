@@ -1,6 +1,6 @@
 #include <jwt-cpp/jwt.h>
 #include <sodium.h>
-#include "AuthService.hpp"
+#include "services/AuthService.hpp"
 #include "Application.hpp"
 #include "SystemException.hpp"
 #include "dbop/DbOpFactory.hpp"
@@ -39,13 +39,13 @@ namespace OJApp
 
         njson data = info.toJson();
         DbOperateMessage msg {
-            .op_type = DbOperateMessage::DbOpType::INSERT,
+            .op_type = DbOperateMessage::DbOpType::Insert,
             .sql = R"SQL(INSERT INTO users (user_uuid,username,password_hash,email) VALUES(?,?,?,?))SQL",
             .data_key = info.username,
             .param_array = {data["user_uuid"], data["username"], data["password_hash"], data["email"]}
         };
         // 缓存到redis并发布
-        App.getRedisManager().getRedis()->set(msg.data_key, data.dump(), std::chrono::milliseconds{m_ExpireSec});
+        App.getRedisManager().set(info.username, data.dump());
         App.getRedisManager().publishDbOperate(msg);
 
         sv_info.message = "registration success";
@@ -65,17 +65,13 @@ namespace OJApp
             return sv_info;
         }
         std::string password = info.password_hash;
-        auto data_str = App.getRedisManager().getRedis()->get(info.username);
+        auto data_str = App.getRedisManager().get(info.username);
         if (!data_str.has_value()) {
-            njson params = njson::array();
-            params.push_back(info.username);
-            auto db_op = makeDbOp(DbOp::OpType::QUERY, R"SQL(SELECT password_hash FROM users WHERE username = ?)SQL", params);
-            App.getDbManager().execute(db_op.get());
-            auto query_op = dynamic_cast<DbOp::DbQueryOp *>(db_op.get());
-            njson result = query_op->getResult();
+            auto db_op = makeDbOp(DbOp::OpType::Query, R"SQL(SELECT password_hash FROM users WHERE username = ?)SQL", {info.username.data()});
+            njson result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));
             info.password_hash = result.front().at("password_hash").get<std::string>();
         } else {
-            info.fromJson(njson::parse(*data_str));
+            info.fromJson(njson::parse(data_str.value()));
         }
 
         if (!verifyPassword(password, info.password_hash)) {
@@ -91,7 +87,7 @@ namespace OJApp
             throw SystemException{ InternalServerError, "generateToken error" };
         }
 
-        App.getRedisManager().getRedis()->set(info.username, token, std::chrono::milliseconds{m_ExpireSec});
+        App.getRedisManager().set(token, info.username);
 
         sv_info.status = OK;
         sv_info.message = "login success";
@@ -101,17 +97,14 @@ namespace OJApp
     bool AuthService::queryUserNameExist(std::string_view name)
     {
         LOG_INFO("search user with username: {}", name);
-        if (redisExist(name))
-            return true;
-        LOG_INFO("not exist user, try to search from db");
 
-        auto db_op = DbOp::makeDbOp(DbOp::OpType::QUERY , R"SQL(SELECT * FROM users WHERE username = ?)SQL", {name.data()});
-        App.getDbManager().execute(db_op.get());
-        auto query_op = dynamic_cast<DbOp::DbQueryOp *>(db_op.get());
-        auto result = query_op->getResult();
+        auto db_op = DbOp::makeDbOp(DbOp::OpType::Query , R"SQL(SELECT * FROM users WHERE username = ?)SQL", {name.data()});
+        auto result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));
 
-        if (result.size() > 0)
+        if (!result.empty()){
+            LOG_INFO("query username {} return exist result", name);
             return true;
+        }
         LOG_INFO("queryUserInfoByName return null result");
         return false;
     }
@@ -170,10 +163,5 @@ namespace OJApp
             password.size()
         );
         return result == 0;
-    }
-
-    bool AuthService::redisExist(std::string_view key) const
-    {
-        return App.getRedisManager().getRedis()->exists(key) == 1;
     }
 }

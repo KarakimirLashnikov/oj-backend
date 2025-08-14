@@ -12,7 +12,7 @@ namespace OJApp
 
     DbManager::DbManager(Core::Configurator &cfg)
     {
-        int expiry = cfg.get<int>("application", "EXPIRY", 1);
+        int expiry = cfg.get<int>("judgedb", "OP_WAIT_TIME", 10);
         m_ExpireSec = std::chrono::seconds{expiry};
         m_DBConnPool = std::make_unique<Database::DbPool>(cfg);
     }
@@ -44,5 +44,11 @@ namespace OJApp
         }
         
         m_DBConnPool->returnWorker(worker->workerID());
+    }
+
+    njson::array_t DbManager::query(DbOp::DbQueryOp *query_op)
+    {
+        this->execute(query_op);
+        return query_op->getResult();
     }
 }

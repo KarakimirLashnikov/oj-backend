@@ -9,6 +9,6 @@ namespace OJApp::DbOp
         DbInsertOp(std::string sql, njson param_array);
         virtual ~DbInsertOp() noexcept = default;
 
-        OPERATION_TYPE(INSERT)
+        OPERATION_TYPE(Insert)
     };
 }

@@ -2,6 +2,7 @@
 #include "Types.hpp"
 #include "DbPool.hpp"
 #include "dbop/DbOperation.hpp"
+#include "dbop/DbQueryOp.hpp"
 
 namespace OJApp
 {
@@ -13,6 +14,8 @@ namespace OJApp
         ~DbManager() = default;
 
         void execute(DbOp::DbOperation* db_op);
+
+        njson::array_t query(DbOp::DbQueryOp* query_op);
 
     private:
         std::unique_ptr<Database::DbPool> m_DBConnPool;

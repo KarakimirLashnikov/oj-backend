@@ -16,20 +16,7 @@ namespace Judge
         COMPILATION_ERROR     = BITMASK(7)
     };
 
-    inline std::string toString(TestStatus t)
-    {
-        switch (t)
-        {
-        case TestStatus::ACCEPTED: return "ACCEPTED";
-        case TestStatus::WRONG_ANSWER: return "WRONG_ANSWER";
-        case TestStatus::COMPILATION_ERROR: return "COMPILATION_ERROR";
-        case TestStatus::RUNTIME_ERROR: return "RUNTIME_ERROR";
-        case TestStatus::TIME_LIMIT_EXCEEDED: return "TIME_LIMIT_EXCEEDED";
-        case TestStatus::MEMORY_LIMIT_EXCEEDED: return "MEMORY_LIMIT_EXCEEDED";
-        case TestStatus::INTERNAL_ERROR: return "INTERNAL_ERROR";
-        default: throw std::out_of_range{"Invalid enum value"};
-        }
-    }
+    std::string testStatusToString(TestStatus t);
 
     struct TestResult
     {

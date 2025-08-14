@@ -40,8 +40,17 @@ namespace OJApp
         // 提供Redis访问接口（供订阅者从Redis获取数据）
         std::shared_ptr<sw::redis::Redis> getRedis() const { return m_Redis; }
 
+        bool set(const std::string &key, const std::string &value);
+
+        bool exists(const std::string& key);
+
+        bool expire(const std::string& key);
+
+        std::optional<std::string> get(const std::string& key);
+
     private:
         std::shared_ptr<sw::redis::Redis> m_Redis;
+        std::chrono::seconds m_KeyTTL;
 
     private:
         RedisManager(const RedisManager &) = delete;

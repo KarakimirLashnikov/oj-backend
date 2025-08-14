@@ -6,10 +6,10 @@ namespace OJApp::DbOp
 {
     enum class OpType
     {
-        INSERT,
-        UPDATE,
-        DELETE,
-        QUERY
+        Insert,
+        Update,
+        Delete,
+        Query
     };
 
 #define OPERATION_TYPE(op)                                                             \

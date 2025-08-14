@@ -5,12 +5,12 @@
 
 namespace Judge
 {
-    Judger::Judger(LangID language_id, const fs::path& source_code, const ResourceLimits& resource_limits)
+    Judger::Judger(LangID language_id, const fs::path& source_code, const LimitsInfo& resource_limits)
     : m_ActuatorPtr{}
     , m_CompilerPtr{}
     , m_CompileError{}
     , m_ExecutablePath{ source_code }
-    , m_ResourceLimits{resource_limits}
+    , m_LimitsInfo{resource_limits}
     {
         if (language_id == LangID::CPP) {
             m_ExecutablePath = source_code.parent_path() / "main";
@@ -40,7 +40,7 @@ namespace Judge
             return result;
         }
 
-        ExecutionResult execution_result{ m_ActuatorPtr->execute(m_ExecutablePath.c_str(), m_ResourceLimits, stdin_data)};
+        ExecutionResult execution_result{ m_ActuatorPtr->execute(m_ExecutablePath.c_str(), m_LimitsInfo, stdin_data)};
         result = std::move(execution_result.test_result);
 
         if (result.status == TestStatus::UNKNOWN) {

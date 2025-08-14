@@ -1,18 +1,16 @@
 #include <sodium.h>
 #include <openssl/evp.h>
 #include "Application.hpp"
-#include "Types.hpp"
 #include "Configurator.hpp"
 #include "ThreadPool.hpp"
 #include "FileWriter.hpp"
-#include "utilities/JudgeResult.hpp"
-#include "utilities/Language.hpp"
 #include "FileException.hpp"
 #include "SystemException.hpp"
+#include "utilities/JudgeResult.hpp"
 #include "Judger.hpp"
 #include "DbManager.hpp"
 #include "RedisManager.hpp"
-#include "AuthService.hpp"
+#include "services/AuthService.hpp"
 #include "dbop/DbOpFactory.hpp"
 
 namespace OJApp
@@ -90,7 +88,7 @@ namespace OJApp
     {
         this->m_ImplPtr = std::make_unique<Impl>(conf_file);
         this->m_HttpServer = std::make_unique<httplib::Server>();
-        Judge::CppActuator::initSystem(this->getConfigurator());
+        Judge::Actuator::initSystem(this->getConfigurator());
     }
 
     void Application::run(std::string_view host, uint16_t port)

@@ -31,9 +31,9 @@ namespace OJApp::DbOp
         }
     }
 
-    njson DbQueryOp::getResult()
+    njson::array_t DbQueryOp::getResult()
     {
-        njson result_arr = njson::array();
+        njson::array_t result_arr = njson::array();
         while (m_QueryResult->next()) {
             njson temp;
             auto col = m_QueryResult->getMetaData()->getColumnCount();

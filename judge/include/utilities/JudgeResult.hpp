@@ -1,7 +1,7 @@
 #pragma once
 #include "Core.hpp"
 #include "utilities/ExecutionResult.hpp"
-#include "utilities/Language.hpp"
+#include "Types.hpp"
 
 namespace Judge
 {
@@ -23,7 +23,7 @@ namespace Judge
     std::string toString(SubmissionStatus st);
 
 
-    using Judge::Language::LangID;
+    using Core::Types::LangID;
     struct JudgeResult
     {
     public:

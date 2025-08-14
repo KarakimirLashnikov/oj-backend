@@ -64,7 +64,7 @@ namespace Core::Types
         this->difficulty = stringToDifficulty(json.at("difficulty").get<std::string>());
     }
 
-    njson TestCase::toJson() const
+    njson TestCaseInfo::toJson() const
     {
         njson j = njson{
             { "stdin_data", this->stdin_data },
@@ -74,10 +74,79 @@ namespace Core::Types
         return j;
     }
 
-    void TestCase::fromJson(const njson& json)
+    void TestCaseInfo::fromJson(const njson& json)
     {
         this->stdin_data = json.at("stdin_data").get<std::string>();
         this->expected_output = json.at("expected_output").get<std::string>();
         this->sequence = json.at("sequence").get<uint32_t>();
+    }
+
+
+    std::string LanguageIdtoString(LangID id)
+    {
+        switch (id)
+        {
+        case LangID::CPP:
+            return "C++";
+        case LangID::PYTHON:
+            return "Python";
+        case LangID::UNKNOWN:
+        default: return "unknown";
+        }
+    }
+
+    std::string getFileExtension(LangID id)
+    {
+        switch (id)
+        {
+        case LangID::CPP:
+            return ".cpp";
+        case LangID::PYTHON:
+            return ".py";
+        case LangID::UNKNOWN:
+        default: return "";
+        }
+    }
+
+    njson LimitsInfo::toJson() const
+    {
+        njson j = njson{
+            { "time_limit_s", this->time_limit_s },
+            { "extra_time_s", this->extra_time_s },
+            { "wall_time_s", this->wall_time_s },
+            { "memory_limit_kb", this->memory_limit_kb },
+            { "stack_limit_kb", this->stack_limit_kb }
+        };
+        return j;
+    }
+
+    void LimitsInfo::fromJson(const njson &data)
+    {
+        this->time_limit_s = data.at("time_limit_s").get<float>();
+        this->extra_time_s = data.at("extra_time_s").get<float>();
+        this->wall_time_s = data.at("wall_time_s").get<float>();
+        this->memory_limit_kb = data.at("memory_limit_kb").get<uint32_t>();
+        this->stack_limit_kb = data.at("stack_limit_kb").get<uint32_t>();
+    }
+
+    njson SubmissoinInfo::toJson() const
+    {
+        njson j = njson{
+            { "user_uuid", this->user_uuid },
+            { "problem_title", this->problem_title },
+            { "source_code", this->source_code },
+            { "submission_id", this->submission_id },
+            { "language", static_cast<int>(this->language_id) }
+        };
+        return j;
+    }
+
+    void SubmissoinInfo::fromJson(const njson &data)
+    {
+        this->user_uuid = data.at("user_uuid").get<std::string>();
+        this->problem_title = data.at("problem_title").get<std::string>();
+        this->source_code = data.at("source_code").get<std::string>();
+        this->submission_id = data.at("submission_id").get<std::string>();
+        this->language_id = static_cast<LangID>(data.at("language").get<int>());
     }
 }

@@ -10,11 +10,11 @@ namespace OJApp::DbOp
 
         virtual ~DbQueryOp() = default;
 
-        OPERATION_TYPE(QUERY)
+        OPERATION_TYPE(Query)
 
         void operator()(std::shared_ptr<Database::DbWorker>) override;
 
-        njson getResult();
+        njson::array_t getResult();
     private:
         std::unique_ptr<sql::ResultSet> m_QueryResult;
     };

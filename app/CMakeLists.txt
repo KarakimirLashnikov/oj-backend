@@ -14,6 +14,7 @@ file(
     "src/authentication/*.cpp"
     "src/dbop/*.cpp"
     "src/dbtables/*.cpp"
+    "src/services/*.cpp"
     "src/*.cpp"
 )
 

@@ -1,19 +1,11 @@
 #pragma once
 #include "Types.hpp"
 #include "Configurator.hpp"
-#include "Http.hpp"
+#include "services/ServiceInfo.hpp"
 
 namespace OJApp
 {
     using Core::Types::UserInfo;
-    using namespace Core::Http;
-
-    struct ServiceInfo {
-        std::string message;
-        ResponseStatusCode status;
-
-        inline operator bool() const { return isSuccess(this->status); }
-    };
 
     class AuthService
     {
@@ -32,8 +24,6 @@ namespace OJApp
         std::optional<std::string> hashPassword(std::string_view pwd);
 
         bool verifyPassword(std::string_view password, std::string_view hash);
-
-        bool redisExist(std::string_view key) const;
 
     private:
         std::string m_SecretKey;

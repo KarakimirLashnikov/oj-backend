@@ -2,12 +2,12 @@
 #include "Core.hpp"
 #include "Types.hpp"
 #include "utilities/ExecutionResult.hpp"
-#include "utilities/ResourceLimits.hpp"
 #include "Configurator.hpp"
 
 namespace Judge
 {
     using Core::Types::TimeStamp;
+    using Core::Types::LimitsInfo;
 
     class Actuator
     {
@@ -18,7 +18,7 @@ namespace Judge
         
         // 核心执行方法
         ExecutionResult execute(const fs::path& exe_path,
-                                const ResourceLimits& limits,
+                                const LimitsInfo& limits,
                                 std::string_view stdin_data);
 
         
@@ -27,7 +27,7 @@ namespace Judge
                         ,int stdout_pipe[2]
                         ,int stderr_pipe[2]
                         ,const fs::path& exe_path
-                        ,const ResourceLimits& limits);
+                        ,const LimitsInfo& limits);
         // 子进程运行逻辑 （ 由具体语言实现 )
         virtual void setupLanguageEnv();
         virtual void runChildProcess(const fs::path& exe_path) = 0;
@@ -36,8 +36,8 @@ namespace Judge
         void createPipes(int stdin_pipe[2], int stdout_pipe[2], int stderr_pipe[2]);
         
         // Cgroup管理
-        fs::path createCgroupForProcess(pid_t pid, const ResourceLimits& limit);
-        void setupCgroupLimits(const ResourceLimits& limit, const fs::path& cgroup_path);
+        fs::path createCgroupForProcess(pid_t pid, const LimitsInfo& limit);
+        void setupCgroupLimits(const LimitsInfo& limit, const fs::path& cgroup_path);
         void cleanupCgroup(const fs::path& cgroup_path);
 
         // 子进程监控
@@ -46,7 +46,7 @@ namespace Judge
                          int stderr_fd,
                          const TimeStamp& start_at,
                          ExecutionResult& result,
-                         const ResourceLimits& limit,
+                         const LimitsInfo& limit,
                          const fs::path& cgroup_path);
 
         static Core::Configurator* s_ConfiguratorPtr;

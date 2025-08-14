@@ -1,16 +1,17 @@
 #pragma once
-#include "Core.hpp"
+#include "Types.hpp"
 #include "actuators/Actuator.hpp"
 #include "compilers/Compiler.hpp"
-#include "utilities/Language.hpp"
 
 namespace Judge
 {
-    using Language::LangID;
+    using Core::Types::LangID;
+    using Core::Types::LimitsInfo;
+    
     class Judger
     {
     public:
-        explicit Judger(LangID language_id, const fs::path& source_code, const ResourceLimits& resource_limits);
+        explicit Judger(LangID language_id, const fs::path& source_code, const LimitsInfo& resource_limits);
 
         TestResult judge(const std::string& stdin_data, const std::string& expected_output);
 
@@ -20,6 +21,6 @@ namespace Judge
         std::unique_ptr<Actuator> m_ActuatorPtr;
         fs::path m_ExecutablePath{};
         std::string m_CompileError{};
-        ResourceLimits m_ResourceLimits{};
+        LimitsInfo m_LimitsInfo{};
     };
 }

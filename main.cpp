@@ -1,8 +1,10 @@
 #include "Application.hpp"
 #include "api/authentication.hpp"
+#include "api/problems.hpp"
 
 using namespace Core::Http;
 using namespace OJApp::Authentication;
+using namespace OJApp::Problems;
 
 int main()
 {
@@ -12,6 +14,8 @@ int main()
 
         App.registryRouter<POST>("/api/auth/registry", &registry);
         App.registryRouter<POST>("/api/auth/login", &login);
+
+        App.registryRouter<POST>("/api/problems", &createProblem);
     
         App.run("0.0.0.0", 8000);
     }
