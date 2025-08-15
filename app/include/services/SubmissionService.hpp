@@ -12,5 +12,7 @@ namespace OJApp
         SubmissionService() = default;
 
         ServiceInfo submit(SubmissionInfo info, const std::string &token);
+
+        ServiceInfo querySubmission(const std::string &submission_id, const std::string &token);
     };
 }

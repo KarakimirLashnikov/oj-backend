@@ -7,7 +7,7 @@ namespace Judge
     using Core::Types::SubID;
     using Core::Types::StatusCode;
 
-    std::string toString(SubmissionStatus s)
+    std::string submissionStatusToString(SubmissionStatus s)
     {
         switch (s)
         {

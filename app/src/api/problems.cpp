@@ -65,4 +65,20 @@ namespace OJApp::Problems
             }
         );
     }
+
+    void getProblemList(const httplib::Request &req, httplib::Response &res)
+    {
+        handleHttpWrapper(req, res, { "token", "problem_title", "stdin_data", "expected_output", "sequence" },
+            [&](httplib::Response& res, njson request) -> void {
+                const std::string token{ request.at("token").get<std::string>() };
+
+                ProblemService service;
+                ServiceInfo sv_info = service.getProblemList(token);
+
+                res.status = sv_info.status;
+                njson response = njson{ {"message", sv_info.message} };
+                res.set_content(response.dump(), "application/json");
+            }
+        );
+    }
 }

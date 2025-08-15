@@ -1,6 +1,7 @@
 #include "api/submissions.hpp"
 #include "api/api.hpp"
 #include "services/SubmissionService.hpp"
+#include "submissions.hpp"
 
 namespace OJApp::Submissions
 {
@@ -28,4 +29,22 @@ namespace OJApp::Submissions
             }
         );
     }
+
+    void querySubmissions(const httplib::Request &req, httplib::Response &res)
+    {
+        handleHttpWrapper(req, res, { "token", "submission_id" },
+            [&](httplib::Response& res, njson request) -> void {
+                const std::string token{ request.at("token").get<std::string>() };
+                const std::string submission_id{ request.at("submission_id").get<std::string>() };
+
+                SubmissionService service;
+                ServiceInfo sv_info = service.querySubmission(submission_id, token);
+
+                res.status = sv_info.status;
+                njson response = njson{ {"message", sv_info.message} };
+                res.set_content(response.dump(), "application/json");
+            }
+        );
+    }
 }
+

@@ -1,5 +1,6 @@
 #pragma once
 #include "Http.hpp"
+#include "Types.hpp"
 
 namespace OJApp
 {
@@ -7,7 +8,7 @@ namespace OJApp
 
     struct ServiceInfo 
     {
-        std::string message;
+        njson message;
         ResponseStatusCode status;
 
         inline operator bool() const { return isSuccess(this->status); }

@@ -186,6 +186,8 @@ namespace OJApp
                         ic.stop();
                     }
 
+                    Judge::JudgeResult judge_result{sub.problem_title, sub.submission_id, sub.language_id};
+
                     Judge::Judger judger{sub.language_id, code_file, lm_info};
                     std::vector<DbOperateMessage> msgs;
                     msgs.reserve(tcs.size());
@@ -214,13 +216,39 @@ SELECT s.id, tc.id, ?, ?, ?, ?, ? FROM s, tc;)SQL",
                             }
                         );
 
-                        if (tc_result.status != Judge::TestStatus::ACCEPTED)
+                        judge_result.push_back(std::move(tc_result));
+
+                        if (judge_result.back().status != Judge::TestStatus::ACCEPTED)
                             break;
                     }
+
+                    judge_result.setStatus();
+
+                    msgs.push_back(DbOperateMessage{
+                            .op_type = OpType::Insert,
+                            .sql = R"SQL(WITH s AS (SELECT id FROM users WHERE username = ?),
+p AS (SELECT id FROM problems WHERE title = ?)
+INSERT INTO submissions (sub_uuid, user_id, problem_id, language, code, overall_status)
+SELECT ?, s.id, p.id, ?, ?, ? FROM s, p;)SQL",
+                            .data_key = "judge_result" + sub.submission_id,
+                            .param_array = { sub.username
+                                , sub.problem_title
+                                , sub.submission_id
+                                , LanguageIdtoString(sub.language_id)
+                                , sub.source_code
+                                , Judge::submissionStatusToString(judge_result.status)
+                            }
+                        }
+                    );
                     
                     for (const auto& m : msgs) {
                         App.getRedisManager().publishDbOperate(m);
                     }
+
+                    if (!fs::remove_all(code_dir))
+                        LOG_ERROR("submission file {} remove failed", code_dir.string());
+
+                    App.getRedisManager().set("submission_tmp_" + sub.submission_id, "COMPLETE");
                 } catch (...) {
                     LOG_ERROR("Thread ID: {} , JudgeTask failed, Submission ID: {}", std::this_thread::get_id(), sub.submission_id);
                 }

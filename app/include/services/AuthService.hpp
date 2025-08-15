@@ -14,7 +14,7 @@ namespace OJApp
 
         ServiceInfo registryService(UserInfo info);
 
-        ServiceInfo loginService(UserInfo info, std::string& token);
+        ServiceInfo loginService(UserInfo info);
 
         bool queryUserNameExist(std::string_view name);
 

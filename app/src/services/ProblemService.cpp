@@ -1,6 +1,7 @@
 #include "services/ProblemService.hpp"
 #include "dbop/DbOpFactory.hpp"
 #include "Application.hpp"
+#include "ProblemService.hpp"
 
 namespace OJApp
 {
@@ -13,13 +14,13 @@ namespace OJApp
         ServiceInfo sv_info{};
         
         if (!App.getRedisManager().exists(token)) {
-            sv_info.message = "Authentication failed, please login again";
+            sv_info.message["message"] = "Authentication failed, please login again";
             sv_info.status = Unauthorized;
             return sv_info;
         }
 
         if (!App.getRedisManager().expire(token)) {
-            sv_info.message = "Authentication  extend failed in [createProblem]";
+            sv_info.message["message"] = "Authentication  extend failed in [createProblem]";
             sv_info.status = InternalServerError;
             return sv_info;
         }
@@ -28,7 +29,7 @@ namespace OJApp
         njson::array_t result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));
         if (!result.empty()) {
             sv_info.status = Conflict;
-            sv_info.message = "Problems's title is used.";
+            sv_info.message["message"] = "Problems's title is used.";
             return sv_info;
         }
 
@@ -44,7 +45,7 @@ SELECT ?, ?, ?, id FROM u;)SQL",
         App.getRedisManager().publishDbOperate(msg);
 
         sv_info.status = Created;
-        sv_info.message = "Create problems successfully";
+        sv_info.message["message"] = "Create problems successfully";
         return sv_info;
     }
 
@@ -53,13 +54,13 @@ SELECT ?, ?, ?, id FROM u;)SQL",
         ServiceInfo sv_info{};
 
         if (!App.getRedisManager().exists(token)) {
-            sv_info.message = "Authentication failed, please login again";
+            sv_info.message["message"] = "Authentication failed, please login again";
             sv_info.status = Unauthorized;
             return sv_info;
         }
 
         if (!App.getRedisManager().expire(token)) {
-            sv_info.message = "Authentication  extend failed in [createProblem]";
+            sv_info.message["message"] = "Authentication  extend failed in [createProblem]";
             sv_info.status = InternalServerError;
             return sv_info;
         }
@@ -82,7 +83,7 @@ SELECT id FROM p,?,?,?,?,?,?)SQL",
         App.getRedisManager().publishDbOperate(msg);
 
         sv_info.status = Created;
-        sv_info.message = "Create problem limits successfully";
+        sv_info.message["message"] = "Create problem limits successfully";
         return sv_info;
     }
     
@@ -91,13 +92,13 @@ SELECT id FROM p,?,?,?,?,?,?)SQL",
         ServiceInfo sv_info{};
 
         if (!App.getRedisManager().exists(token)) {
-            sv_info.message = "Authentication failed, please login again";
+            sv_info.message["message"] = "Authentication failed, please login again";
             sv_info.status = Unauthorized;
             return sv_info;
         }
 
         if (!App.getRedisManager().expire(token)) {
-            sv_info.message = "Authentication  extend failed in [createProblem]";
+            sv_info.message["message"] = "Authentication  extend failed in [uploadTestCases]";
             sv_info.status = InternalServerError;
             return sv_info;
         }
@@ -114,7 +115,41 @@ SELECT id FROM p,?,?,?)SQL",
         App.getRedisManager().publishDbOperate(msg);
 
         sv_info.status = Created;
-        sv_info.message = "upload test cases successfully";
+        sv_info.message["message"] = "upload test cases successfully";
+        return sv_info;
+    }
+    
+    ServiceInfo ProblemService::getProblemList(const std::string &token)
+    {
+        ServiceInfo sv_info{};
+        
+        if (!App.getRedisManager().exists(token)) {
+            sv_info.message["message"] = "Authentication failed, please login again";
+            sv_info.status = Unauthorized;
+            return sv_info;
+        }
+
+        if (!App.getRedisManager().expire(token)) {
+            sv_info.message["message"] = "Authentication  extend failed in [getProblemList]";
+            sv_info.status = InternalServerError;
+            return sv_info;
+        }
+
+        auto db_op = makeDbOp(OpType::Query, R"SQL(SELECT * FROM problems)SQL", {});
+        njson::array_t result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));
+
+        sv_info.status = OK;
+        sv_info.message["message"] = "get problem list successfully";
+        sv_info.data["total"] = result.size();
+        for (auto val : result) {
+            sv_info.data["problem_list"].push_back({
+                { "id", (std::string)val.at("id")},
+                { "title", (std::string)val.at("title") },
+                { "difficulty", (std::string)val.at("difficulty")},
+                { "description", (std::string)val.at("description") }
+            });
+        }
+
         return sv_info;
     }
 }

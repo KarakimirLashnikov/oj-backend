@@ -21,27 +21,24 @@ namespace OJApp::Authentication
                 auto sv_info{ App.getAuthService().registryService(std::move(info)) };
 
                 res.status = sv_info.status;
-                njson response = njson{ {"message", sv_info.message} };
-                res.set_content(response.dump(), "application/json");
+                res.set_content(sv_info.message.dump(), "application/json");
             }
         );
     }
 
     void login(const httplib::Request& req, httplib::Response& res)
     {
-        handleHttpWrapper(req, res, { "username", "password", "email" }, 
+        handleHttpWrapper(req, res, { "username", "password" }, 
             [&](httplib::Response& res, njson request) -> void{
                 UserInfo info {};
                 info.username = request.at("username").get<std::string>();
                 info.password_hash = request.at("password").get<std::string>();
-                std::string token{};
 
                 LOG_INFO("check user password {} exists", info.username);
-                auto sv_info{ App.getAuthService().loginService(std::move(info), token) };
+                auto sv_info{ App.getAuthService().loginService(std::move(info)) };
 
                 res.status = sv_info.status;
-                njson response = njson{ {"message", sv_info.message}, {"token", token} };
-                res.set_content(response.dump(), "application/json");
+                res.set_content(sv_info.message.dump(), "application/json");
             }
         );
     }

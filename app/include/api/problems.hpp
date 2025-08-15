@@ -10,4 +10,6 @@ namespace OJApp::Problems
     void addProblemLimit(const httplib::Request& req, httplib::Response& res);
 
     void uploadTestCases(const httplib::Request& req, httplib::Response& res);
+
+    void getProblemList(const httplib::Request& req, httplib::Response& res);
 }

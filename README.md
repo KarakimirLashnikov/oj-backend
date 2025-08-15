@@ -1,6 +1,5 @@
-```markdown
-## 环境配置
 ### 依赖库安装
+
 ```bash
 # 克隆第三方库
 cd third_party
@@ -23,7 +22,9 @@ sudo apt install -y \
 ```
 
 ### MySQL配置说明
+
 - 安装后需修改数据库[CMakeLists](./database/CMakeLists.txt)：
+
 ```cmake
 # 检查并更新 MySQL Connector/C++ 相关路径:
 # 1. 查找 MySQL Connector/C++ 头文件路径
@@ -47,7 +48,9 @@ endif()
 ```
 
 ### redis++配置说明
+
 - 通过 apt 安装的 hiredis 没有 cmake 配置文件，修改 redis-plus-plus 中的 redis++-config.cmake.in
+
 ```cmake
 @PACKAGE_INIT@
 
@@ -115,15 +118,20 @@ include("${CMAKE_CURRENT_LIST_DIR}/redis++-targets.cmake")
 
 check_required_components(redis++)
 ```
+
 - 构建
-cd redis-plus-plus
-mkdir build
-cd build
+
+1. cd redis-plus-plus
+2. mkdir build
+3. cd build
 
 - 配置 CMake
-cmake ..
+
+4. cmake ..
 
 - 编译和安装
-make -j$(nproc)
-sudo make install
+
+5. make -j$(nproc)
+6. sudo make install
+
 ---

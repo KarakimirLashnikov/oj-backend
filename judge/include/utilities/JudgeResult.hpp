@@ -20,7 +20,7 @@ namespace Judge
         CE, //Compilation Error
     };
 
-    std::string toString(SubmissionStatus st);
+    std::string submissionStatusToString(SubmissionStatus st);
 
 
     using Core::Types::LangID;

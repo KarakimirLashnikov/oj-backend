@@ -18,5 +18,7 @@ namespace OJApp
         ServiceInfo addProblemLimit(ProblemLimitsInfo info, const std::string& token);
 
         ServiceInfo uploadTestCases(TestCaseInfo info, const std::string& token);
+
+        ServiceInfo getProblemList(const std::string& token);
     };
 }

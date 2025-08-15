@@ -23,7 +23,7 @@ namespace OJApp
         ServiceInfo sv_info{};
         if (queryUserNameExist(info.username)) {
             LOG_INFO("user exist, return username exist response");
-            sv_info.message = "username exist, please try other name";
+            sv_info.message["message"] = "username exist, please try other name";
             sv_info.status = Conflict;
             return sv_info;
         }
@@ -48,19 +48,19 @@ namespace OJApp
         App.getRedisManager().set(info.username, data.dump());
         App.getRedisManager().publishDbOperate(msg);
 
-        sv_info.message = "registration success";
+        sv_info.message["message"] = "registration success";
         sv_info.status = Created;
         return sv_info;
     }
 
     using DbOp::makeDbOp;
-    ServiceInfo AuthService::loginService(UserInfo info, std::string &token)
+    ServiceInfo AuthService::loginService(UserInfo info)
     {
         ServiceInfo sv_info{};
         LOG_INFO("start to query user {} from db", info.username);
         if (!queryUserNameExist(info.username)) {
             LOG_INFO("user does not exist");
-            sv_info.message = "username does not exist, please register firstly";
+            sv_info.message["message"] = "username does not exist, please register firstly";
             sv_info.status = NotFound;
             return sv_info;
         }
@@ -81,7 +81,7 @@ namespace OJApp
             return sv_info;
         }
 
-        token = generateUserToken(info.user_uuid).value_or("");
+        std::string token = generateUserToken(info.user_uuid).value_or("");
         if (token.empty()) {
             LOG_INFO("generateUserToken failed");
             throw SystemException{ InternalServerError, "generateToken error" };
@@ -91,6 +91,7 @@ namespace OJApp
 
         sv_info.status = OK;
         sv_info.message = "login success";
+        sv_info.message["token"] = std::move(token);
         return sv_info;
     }
 
