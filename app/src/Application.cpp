@@ -138,11 +138,92 @@ namespace OJApp
     using DbOp::makeDbOp;
     void Application::processDbOperateEvent(std::string channel, std::string msg) {
         m_ImplPtr->m_JudgerPool->enqueue([this, message = msg]()->void {
-                LOG_INFO("db_op message receive, message = {}", message);
-                DbOperateMessage op_msg{ DbOperateMessage::deserialize(message) };
-                auto db_op = makeDbOp(op_msg.op_type, std::move(op_msg.sql), std::move(op_msg.param_array));
-                m_ImplPtr->m_DbManager->execute(db_op.get());
-                LOG_INFO("db_op message done, message = {}", message);
+                try {
+                    LOG_INFO("db_op message receive, message = {}", message);
+                    DbOperateMessage op_msg{ DbOperateMessage::deserialize(message) };
+                    auto db_op = makeDbOp(op_msg.op_type, std::move(op_msg.sql), std::move(op_msg.param_array));
+                    m_ImplPtr->m_DbManager->execute(db_op.get());
+                    LOG_INFO("db_op message done, message = {}", message);
+                } catch (...) {
+                    LOG_ERROR("Thread ID: {} , DbOperateEvent failed, message: {}", std::this_thread::get_id(), message);
+                }
+            }
+        );
+    }
+
+    using Exceptions::FileException;
+    using Core::Types::getFileExtension;
+    using DbOp::OpType;
+    using DbOp::DbQueryOp;
+    void Application::processJudgeTask(SubmissionInfo info)
+    {
+        m_ImplPtr->m_JudgerPool->enqueue([this, sub = std::move(info)] -> void {
+                try {
+                    fs::path code_dir{ m_ImplPtr->m_SubmissionTempDir / sub.submission_id };
+                    if (!fs::create_directory(code_dir))
+                        throw FileException(FileException::ErrorType::WriteError, code_dir.string(), "fiailed create temp dir to save code");
+                    asio::io_context ic{};
+                    fs::path code_file = code_dir / ("main" + getFileExtension(sub.language_id));
+
+                    {
+                        Core::FileWriter writer(ic);
+                        writer.write(code_file.string(), sub.source_code);
+                    }
+
+                    auto db_op = makeDbOp(OpType::Query
+                                , R"SQL(SELECT * FROM test_cases tc JOIN problems p ON tc.problem_id = p.id WHERE p.title = ? ORDER BY tc.sequence ASC;)SQL"
+                                , { sub.problem_title });
+                    auto tcs = App.getDbManager().query(dynamic_cast<DbQueryOp*>(db_op.get()));
+
+                    db_op = makeDbOp(OpType::Query
+                                , R"SQL(SELECT * FROM problem_limits pl JOIN problems p ON pl.problem_id = p.id WHERE p.title = ? AND pl.language = ? LIMIT 1;)SQL"
+                                , { sub.problem_title, LanguageIdtoString(sub.language_id) });
+                    auto limit = App.getDbManager().query(dynamic_cast<DbQueryOp*>(db_op.get()));
+                    LimitsInfo lm_info{};
+                    lm_info.fromJson(limit.front());
+
+                    if (!ic.stopped()) {
+                        ic.stop();
+                    }
+
+                    Judge::Judger judger{sub.language_id, code_file, lm_info};
+                    std::vector<DbOperateMessage> msgs;
+                    msgs.reserve(tcs.size());
+                    uint32_t idx{1};
+                    for (const auto& tc : tcs) {
+                        TestCaseInfo tc_info{};
+                        tc_info.fromJson(tc);
+                        auto tc_result = judger.judge(tc_info.stdin_data, tc_info.expected_output);
+
+                        msgs.push_back(DbOperateMessage{
+                                .op_type = OpType::Insert,
+                                .sql = R"SQL(WITH s AS (SELECT id FROM submissions WHERE sub_uuid = ? LIMIT 1),
+tc AS (SELECT id FROM test_cases WHERE problem_title = ? AND sequence = ? LIMIT 1)
+INSERT INTO judge_results (submission_id, test_case_id, status, cpu_time_ms, memory_kb, exit_code, signal_code)
+SELECT s.id, tc.id, ?, ?, ?, ?, ? FROM s, tc;)SQL",
+                                .data_key = sub.submission_id + sub.problem_title + std::to_string(tc_info.sequence),
+                                .param_array = {sub.submission_id
+                                    , sub.problem_title
+                                    , idx++
+                                    , Judge::testStatusToString(tc_result.status)
+                                    , tc_result.duration_us / 1000
+                                    , tc_result.memory_kb
+                                    , tc_result.exit_code
+                                    , tc_result.signal
+                                }
+                            }
+                        );
+
+                        if (tc_result.status != Judge::TestStatus::ACCEPTED)
+                            break;
+                    }
+                    
+                    for (const auto& m : msgs) {
+                        App.getRedisManager().publishDbOperate(m);
+                    }
+                } catch (...) {
+                    LOG_ERROR("Thread ID: {} , JudgeTask failed, Submission ID: {}", std::this_thread::get_id(), sub.submission_id);
+                }
             }
         );
     }

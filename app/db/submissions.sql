@@ -1,6 +1,6 @@
 CREATE TABLE submissions (
     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
-    sub_strid VARCHAR(36) NOT NULL UNIQUE,         -- 评测提交ID
+    sub_uuid VARCHAR(36) NOT NULL UNIQUE,         -- 评测提交ID
     user_id BIGINT UNSIGNED NOT NULL,                 -- 用户ID
     problem_id BIGINT UNSIGNED NOT NULL,              -- 题目ID
     language VARCHAR(16) NOT NULL,                 -- 编程语言

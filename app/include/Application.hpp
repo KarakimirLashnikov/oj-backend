@@ -40,6 +40,8 @@ namespace OJApp
         AuthService& getAuthService();
 
         void processDbOperateEvent(std::string channel, std::string msg);
+
+        void processJudgeTask(SubmissionInfo info);
     private:
         Application() = default;
 

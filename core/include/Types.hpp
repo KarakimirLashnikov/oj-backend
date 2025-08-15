@@ -26,6 +26,7 @@ namespace Core::Types
 
     struct TestCaseInfo : public JsonSerializable
     {
+        std::string problem_title;
         std::string stdin_data;
         std::string expected_output;
         uint32_t sequence;
@@ -36,7 +37,7 @@ namespace Core::Types
 
     struct ProblemInfo : public JsonSerializable
     {
-        std::string author_uuid;
+        std::string username;
         std::string title;
         std::string description;
         DifficultyLevel difficulty;
@@ -64,13 +65,22 @@ namespace Core::Types
         uint32_t memory_limit_kb;
         uint32_t stack_limit_kb;
 
+        virtual njson toJson() const override;
+        virtual void fromJson(const njson &data) override;
+    };
+
+    struct ProblemLimitsInfo : public LimitsInfo
+    {
+        LangID language_id;
+        std::string problem_title;
+
         njson toJson() const override;
         void fromJson(const njson &data) override;
     };
 
-    struct SubmissoinInfo : public JsonSerializable
+    struct SubmissionInfo : public JsonSerializable
     {
-        std::string user_uuid;
+        std::string username;
         std::string problem_title;
         std::string source_code;
         std::string submission_id;

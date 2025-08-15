@@ -48,7 +48,7 @@ namespace Core::Types
     njson ProblemInfo::toJson() const
     {
         njson j = njson{
-            { "author_uuid", this->author_uuid },
+            { "author_uuid", this->username },
             { "title", this->title },
             { "description", this->description },
             { "difficulty", difficultyToString(this->difficulty) },
@@ -58,7 +58,7 @@ namespace Core::Types
 
     void ProblemInfo::fromJson(const njson& json)
     {
-        this->author_uuid = json.at("author_uuid").get<std::string>();
+        this->username = json.at("username").get<std::string>();
         this->title = json.at("title").get<std::string>();
         this->description = json.at("description").get<std::string>();
         this->difficulty = stringToDifficulty(json.at("difficulty").get<std::string>());
@@ -67,6 +67,7 @@ namespace Core::Types
     njson TestCaseInfo::toJson() const
     {
         njson j = njson{
+            { "problem_title", this->problem_title },
             { "stdin_data", this->stdin_data },
             { "expected_output", this->expected_output },
             { "sequence", this->sequence }
@@ -76,6 +77,7 @@ namespace Core::Types
 
     void TestCaseInfo::fromJson(const njson& json)
     {
+        this->problem_title = json.at("problem_title").get<std::string>();
         this->stdin_data = json.at("stdin_data").get<std::string>();
         this->expected_output = json.at("expected_output").get<std::string>();
         this->sequence = json.at("sequence").get<uint32_t>();
@@ -129,10 +131,10 @@ namespace Core::Types
         this->stack_limit_kb = data.at("stack_limit_kb").get<uint32_t>();
     }
 
-    njson SubmissoinInfo::toJson() const
+    njson SubmissionInfo::toJson() const
     {
         njson j = njson{
-            { "user_uuid", this->user_uuid },
+            { "username", this->username },
             { "problem_title", this->problem_title },
             { "source_code", this->source_code },
             { "submission_id", this->submission_id },
@@ -141,12 +143,27 @@ namespace Core::Types
         return j;
     }
 
-    void SubmissoinInfo::fromJson(const njson &data)
+    void SubmissionInfo::fromJson(const njson &data)
     {
-        this->user_uuid = data.at("user_uuid").get<std::string>();
+        this->username = data.at("username").get<std::string>();
         this->problem_title = data.at("problem_title").get<std::string>();
         this->source_code = data.at("source_code").get<std::string>();
         this->submission_id = data.at("submission_id").get<std::string>();
         this->language_id = static_cast<LangID>(data.at("language").get<int>());
+    }
+
+    njson ProblemLimitsInfo::toJson() const
+    {
+        njson j = LimitsInfo::toJson();
+        j["language_id"] = static_cast<int>(this->language_id);
+        j["problem_title"] = this->problem_title;
+        return j;
+    }
+
+    void ProblemLimitsInfo::fromJson(const njson &data)
+    {
+        this->language_id = static_cast<LangID>(data.at("language_id").get<int>());
+        this->problem_title = data.at("problem_title").get<std::string>();
+        LimitsInfo::fromJson(data);
     }
 }
