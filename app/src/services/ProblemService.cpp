@@ -1,7 +1,6 @@
 #include "services/ProblemService.hpp"
 #include "dbop/DbOpFactory.hpp"
 #include "Application.hpp"
-#include "ProblemService.hpp"
 
 namespace OJApp
 {
@@ -25,7 +24,7 @@ namespace OJApp
             return sv_info;
         }
 
-        auto db_op = makeDbOp(OpType::Query, R"SQL(SELECT * FROM problems p WHERE p.title = ?)SQL", { info.title });
+        auto db_op = makeDbOp(OpType::Query, R"SQL(SELECT * FROM problems p WHERE p.title = ?;)SQL", { info.title });
         njson::array_t result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));
         if (!result.empty()) {
             sv_info.status = Conflict;
@@ -36,11 +35,10 @@ namespace OJApp
         std::string username{ App.getRedisManager().get(token).value() };
         DbOperateMessage msg{
             .op_type = OpType::Insert,
-            .sql = R"SQL(WITH u AS (SELECT id FROM users WHERE username = ? LIMIT 1)
-INSERT INTO problems (title,difficulty,description,author_id) 
-SELECT ?, ?, ?, id FROM u;)SQL",
+            .sql = R"SQL(INSERT INTO problems (title,difficulty,description,author_id) 
+VALUES (?, ?, ?, (SELECT id FROM users WHERE username = ? LIMIT 1));)SQL",
             .data_key = info.title,
-            .param_array = { username, info.title,difficultyToString(info.difficulty),info.description }
+            .param_array = { info.title, difficultyToString(info.difficulty), info.description, username }
         };
         App.getRedisManager().publishDbOperate(msg);
 
@@ -67,9 +65,8 @@ SELECT ?, ?, ?, id FROM u;)SQL",
 
         DbOperateMessage msg{
             .op_type = OpType::Insert,
-            .sql = R"SQL(WITH p AS (SELECT id FROM problems WHERE title = ? LIMIT 1)
-INSERT INTO problem_limits (problem_id,language,time_limit_ms,extra_time_ms,wall_time_ms,memory_limit_kb,stack_limit_kb)
-SELECT id FROM p,?,?,?,?,?,?)SQL",
+            .sql = R"SQL(INSERT INTO problem_limits (problem_id,language,time_limit_ms,extra_time_ms,wall_time_ms,memory_limit_kb,stack_limit_kb)
+VALUES ((SELECT id FROM problems WHERE title = ? LIMIT 1),?,?,?,?,?,?);)SQL",
             .data_key = info.problem_title,
             .param_array = {info.problem_title
                             , LanguageIdtoString(info.language_id)
@@ -105,9 +102,8 @@ SELECT id FROM p,?,?,?,?,?,?)SQL",
 
         DbOperateMessage msg{
             .op_type = OpType::Insert,
-            .sql = R"SQL(WITH p AS(SELECT id FROM problems WHERE title = ? LIMIT 1)
-INSERT INTO test_cases (problem_id,stdin_data,expected_output,sequence)
-SELECT id FROM p,?,?,?)SQL",
+            .sql = R"SQL(INSERT INTO test_cases (problem_id,stdin_data,expected_output,sequence)
+VALUES ((SELECT id FROM problems WHERE title = ? LIMIT 1),?,?,?);)SQL",
             .data_key = info.problem_title + std::to_string(info.sequence),
             .param_array = {info.problem_title, info.stdin_data, info.expected_output, info.sequence}
         };
@@ -140,9 +136,9 @@ SELECT id FROM p,?,?,?)SQL",
 
         sv_info.status = OK;
         sv_info.message["message"] = "get problem list successfully";
-        sv_info.data["total"] = result.size();
+        sv_info.message["total"] = result.size();
         for (auto val : result) {
-            sv_info.data["problem_list"].push_back({
+            sv_info.message["problem_list"].push_back({
                 { "id", (std::string)val.at("id")},
                 { "title", (std::string)val.at("title") },
                 { "difficulty", (std::string)val.at("difficulty")},

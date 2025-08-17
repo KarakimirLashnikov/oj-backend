@@ -24,7 +24,7 @@ namespace Judge
         case TestStatus::TIME_LIMIT_EXCEEDED: return "TIME_LIMIT_EXCEEDED";
         case TestStatus::MEMORY_LIMIT_EXCEEDED: return "MEMORY_LIMIT_EXCEEDED";
         case TestStatus::INTERNAL_ERROR: return "INTERNAL_ERROR";
-        default: throw std::out_of_range{"Invalid enum value"};
+        default: return "UNKNOWN";
         }
     }
 }

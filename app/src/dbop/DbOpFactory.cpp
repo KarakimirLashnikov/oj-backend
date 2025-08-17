@@ -14,6 +14,8 @@ namespace OJApp::DbOp
             return std::make_unique<DbInsertOp>(std::move(sql), std::move(param_array));
         case OpType::Query:
             return std::make_unique<DbQueryOp>(std::move(sql), std::move(param_array));
+        case OpType::Update:
+            return std::make_unique<DbUpdateOp>(std::move(sql), std::move(param_array));
         default:
             throw ParameterException(ParameterException::ExceptionType::OUT_OF_RANGE, "Op Type", "invalid op type");
         }

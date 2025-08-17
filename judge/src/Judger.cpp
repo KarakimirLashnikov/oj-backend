@@ -44,6 +44,8 @@ namespace Judge
         result = std::move(execution_result.test_result);
 
         if (result.status == TestStatus::UNKNOWN) {
+            if (execution_result.stdout.back() == '\n')
+                execution_result.stdout.pop_back();
             if (execution_result.stdout == expected_output)
                 result.status = TestStatus::ACCEPTED;
             else

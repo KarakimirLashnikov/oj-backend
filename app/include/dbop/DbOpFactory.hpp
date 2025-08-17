@@ -1,6 +1,7 @@
 #pragma once
 #include "dbop/DbInsertOp.hpp"
 #include "dbop/DbQueryOp.hpp"
+#include "dbop/DbUpdateOp.hpp"
 
 namespace OJApp::DbOp
 {

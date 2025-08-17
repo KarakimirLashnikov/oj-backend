@@ -35,7 +35,7 @@ namespace OJApp
     RedisManager::RedisManager(Core::Configurator &cfg)
     {
         ::DB_OPERATE_CHANNEL = cfg.get<std::string>("redis", "OPERATE_CHANNEL", "db_operate_channel");
-        m_KeyTTL = std::chrono::seconds(cfg.get<int>("redis", "TTL", 600));
+        m_KeyTTL = std::chrono::seconds(cfg.get<int>("redis", "KEY_TTL", 3600));
 
         sw::redis::ConnectionOptions opts{};
         opts.host = cfg.get<std::string>("redis", "HOST", "127.0.0.1");
@@ -61,10 +61,10 @@ namespace OJApp
     }
 
     // 发布数据库操作消息（仅接受规范结构）
-    void RedisManager::publishDbOperate(const DbOperateMessage& msg) {
+    void RedisManager::publishDbOperate(DbOperateMessage msg) {
         // 1. 验证消息合法性（必填字段检查）
         if (!msg.isValid()) {
-            LOG_ERROR("Invalid DbOperateMessage: table_name or data_key is empty");
+            LOG_ERROR("Invalid DbOperateMessage: op / sql / data_key cannot be empty!");
             throw makeSystemException("Invalid message structure");
         }
 

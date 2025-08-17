@@ -139,13 +139,13 @@ namespace OJApp
     void Application::processDbOperateEvent(std::string channel, std::string msg) {
         m_ImplPtr->m_JudgerPool->enqueue([this, message = msg]()->void {
                 try {
-                    LOG_INFO("db_op message receive, message = {}", message);
+                    LOG_INFO("db_op message receive");
                     DbOperateMessage op_msg{ DbOperateMessage::deserialize(message) };
                     auto db_op = makeDbOp(op_msg.op_type, std::move(op_msg.sql), std::move(op_msg.param_array));
                     m_ImplPtr->m_DbManager->execute(db_op.get());
-                    LOG_INFO("db_op message done, message = {}", message);
+                    LOG_INFO("db_op message done");
                 } catch (...) {
-                    LOG_ERROR("Thread ID: {} , DbOperateEvent failed, message: {}", std::this_thread::get_id(), message);
+                    LOG_ERROR("DbOperateEvent failed, message: {}", message);
                 }
             }
         );
@@ -157,6 +157,20 @@ namespace OJApp
     using DbOp::DbQueryOp;
     void Application::processJudgeTask(SubmissionInfo info)
     {
+        App.getRedisManager().publishDbOperate(DbOperateMessage{
+                .op_type = OpType::Insert,
+                .sql = R"SQL(INSERT INTO submissions (sub_uuid, user_id, problem_id, language, code, overall_status) 
+VALUES (?, (SELECT id FROM users WHERE username = ? LIMIT 1), (SELECT id FROM problems WHERE title = ? LIMIT 1), ?, ?, ?);)SQL",
+                .data_key = info.submission_id,
+                .param_array = { info.submission_id
+                    , info.username
+                    , info.problem_title
+                    , LanguageIdtoString(info.language_id)
+                    , info.source_code
+                    , Judge::submissionStatusToString(Judge::SubmissionStatus::PENDING)
+                }
+            }
+        );
         m_ImplPtr->m_JudgerPool->enqueue([this, sub = std::move(info)] -> void {
                 try {
                     fs::path code_dir{ m_ImplPtr->m_SubmissionTempDir / sub.submission_id };
@@ -178,9 +192,14 @@ namespace OJApp
                     db_op = makeDbOp(OpType::Query
                                 , R"SQL(SELECT * FROM problem_limits pl JOIN problems p ON pl.problem_id = p.id WHERE p.title = ? AND pl.language = ? LIMIT 1;)SQL"
                                 , { sub.problem_title, LanguageIdtoString(sub.language_id) });
-                    auto limit = App.getDbManager().query(dynamic_cast<DbQueryOp*>(db_op.get()));
+                    auto limit = App.getDbManager().query(dynamic_cast<DbQueryOp*>(db_op.get())).front();
+                    LOG_INFO("Query problem_limit, limit: {}", limit.dump());
                     LimitsInfo lm_info{};
-                    lm_info.fromJson(limit.front());
+                    lm_info.time_limit_s = static_cast<float>(limit.at("time_limit_ms").get<uint32_t>()) / 1000.f;
+                    lm_info.extra_time_s = static_cast<float>(limit.at("extra_time_ms").get<uint32_t>()) / 1000.f;
+                    lm_info.wall_time_s = static_cast<float>(limit.at("wall_time_ms").get<uint32_t>()) / 1000.f;
+                    lm_info.memory_limit_kb = limit.at("memory_limit_kb").get<uint32_t>();
+                    lm_info.stack_limit_kb = limit.at("stack_limit_kb").get<uint32_t>();
 
                     if (!ic.stopped()) {
                         ic.stop();
@@ -194,21 +213,22 @@ namespace OJApp
                     uint32_t idx{1};
                     for (const auto& tc : tcs) {
                         TestCaseInfo tc_info{};
-                        tc_info.fromJson(tc);
+                        tc_info.stdin_data = tc.at("stdin_data").get<std::string>();
+                        tc_info.expected_output = tc.at("expected_output").get<std::string>();
                         auto tc_result = judger.judge(tc_info.stdin_data, tc_info.expected_output);
 
                         msgs.push_back(DbOperateMessage{
-                                .op_type = OpType::Insert,
-                                .sql = R"SQL(WITH s AS (SELECT id FROM submissions WHERE sub_uuid = ? LIMIT 1),
-tc AS (SELECT id FROM test_cases WHERE problem_title = ? AND sequence = ? LIMIT 1)
-INSERT INTO judge_results (submission_id, test_case_id, status, cpu_time_ms, memory_kb, exit_code, signal_code)
-SELECT s.id, tc.id, ?, ?, ?, ?, ? FROM s, tc;)SQL",
-                                .data_key = sub.submission_id + sub.problem_title + std::to_string(tc_info.sequence),
-                                .param_array = {sub.submission_id
+                            .op_type = OpType::Insert,
+                            .sql = R"SQL(INSERT INTO judge_results (submission_id, test_case_id, status, cpu_time_ms, memory_kb, exit_code, signal_code) 
+VALUES ((SELECT id FROM submissions WHERE sub_uuid = ?),
+        (SELECT id FROM test_cases WHERE problem_id = (SELECT id FROM problems WHERE title = ?) AND sequence = ?),
+        ?, ?, ?, ?, ?);)SQL",
+                            .data_key = sub.submission_id + std::to_string(idx),
+                            .param_array = { sub.submission_id
                                     , sub.problem_title
                                     , idx++
                                     , Judge::testStatusToString(tc_result.status)
-                                    , tc_result.duration_us / 1000
+                                    , static_cast<uint32_t>(tc_result.duration_us / 1000)
                                     , tc_result.memory_kb
                                     , tc_result.exit_code
                                     , tc_result.signal
@@ -216,27 +236,21 @@ SELECT s.id, tc.id, ?, ?, ?, ?, ? FROM s, tc;)SQL",
                             }
                         );
 
-                        judge_result.push_back(std::move(tc_result));
+                        judge_result.results.push_back(std::move(tc_result));
 
-                        if (judge_result.back().status != Judge::TestStatus::ACCEPTED)
+                        if (judge_result.results.back().status != Judge::TestStatus::ACCEPTED)
                             break;
                     }
 
                     judge_result.setStatus();
 
-                    msgs.push_back(DbOperateMessage{
-                            .op_type = OpType::Insert,
-                            .sql = R"SQL(WITH s AS (SELECT id FROM users WHERE username = ?),
-p AS (SELECT id FROM problems WHERE title = ?)
-INSERT INTO submissions (sub_uuid, user_id, problem_id, language, code, overall_status)
-SELECT ?, s.id, p.id, ?, ?, ? FROM s, p;)SQL",
-                            .data_key = "judge_result" + sub.submission_id,
-                            .param_array = { sub.username
-                                , sub.problem_title
-                                , sub.submission_id
-                                , LanguageIdtoString(sub.language_id)
-                                , sub.source_code
-                                , Judge::submissionStatusToString(judge_result.status)
+                    App.getRedisManager().publishDbOperate(DbOperateMessage{
+                        .op_type = OpType::Update,
+                        .sql = R"SQL(UPDATE submissions SET overall_status = ? WHERE sub_uuid = ?;)SQL",
+                        .data_key = sub.submission_id + "_overall_status",
+                        .param_array = { 
+                                Judge::submissionStatusToString(judge_result.status()),
+                                sub.submission_id
                             }
                         }
                     );
@@ -249,8 +263,14 @@ SELECT ?, s.id, p.id, ?, ?, ? FROM s, p;)SQL",
                         LOG_ERROR("submission file {} remove failed", code_dir.string());
 
                     App.getRedisManager().set("submission_tmp_" + sub.submission_id, "COMPLETE");
+                } catch (const njson::exception& e) {
+                    LOG_ERROR("JudgeTask parse json error: {}", e.what());
+                } catch (const sql::SQLException& e) {
+                    LOG_ERROR("JudgeTask query db error: {}", e.what());
+                } catch (const std::exception& e) {
+                    LOG_ERROR("JudgeTask std exception: {}", e.what());
                 } catch (...) {
-                    LOG_ERROR("Thread ID: {} , JudgeTask failed, Submission ID: {}", std::this_thread::get_id(), sub.submission_id);
+                    LOG_ERROR("JudgeTask failed, Submission ID: {}", sub.submission_id);
                 }
             }
         );

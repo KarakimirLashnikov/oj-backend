@@ -1,6 +1,7 @@
 #include "actuators/PythonActuator.hpp"
 #include "SystemException.hpp"
 #include "FileException.hpp"
+#include "Logger.hpp"
 
 static std::once_flag ONCE_FLAG{};
 static std::vector<std::string> PYTHON_EXTRA_ARGS{};

@@ -6,6 +6,7 @@ namespace OJApp::DbOp
 {
     enum class OpType
     {
+        INVALID_OP,
         Insert,
         Update,
         Delete,

@@ -61,7 +61,7 @@ namespace Judge
     {
         std::string str{ std::format("Problem: {}\n", this->problem_title)};
         str.append(std::string("SubmissionId: ") + this->sub_id.data() + "\n");
-        str.append("Status: " + Judge::toString(this->m_Status) + "\n");
+        str.append("Status: " + Judge::submissionStatusToString(this->m_Status) + "\n");
         str.append("Compile Message: " + this->compile_msg + "\n");
         str.append("TestResults: ");
         for (const auto &result: this->results) {

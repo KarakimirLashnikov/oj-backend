@@ -146,12 +146,13 @@ namespace Judge
         try
         {
             cgroup_path = this->createCgroupForProcess(child_pid, limits);
-            LOG_INFO("Cgroup setup completed for PID: {}", child_pid);
-
+            LOG_INFO("Cgroup created for PID: {}", child_pid);
             // 监控子进程
             LOG_INFO("Monitoring PID: {}", child_pid);
             monitorChild(child_pid, stdout_pipe[FATHER_PIPE_INDEX], stderr_pipe[FATHER_PIPE_INDEX], start_at, result, limits, cgroup_path);
-            LOG_INFO("Monitoring finished");
+            LOG_INFO("Monitoring finished, PID: {}, rusult: {}, stderr: {}", child_pid, result.test_result.toString(), result.stderr);
+            LOG_INFO("        stdout: {}", result.stdout.size() < 128 ? result.stdout : result.stdout.substr(0, 128) + "...");
+
         }
         catch (const std::exception &e)
         {

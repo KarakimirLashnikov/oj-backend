@@ -76,7 +76,7 @@ namespace OJApp
 
         if (!verifyPassword(password, info.password_hash)) {
             LOG_INFO("verifyPassword failed");
-            sv_info.message = "password error";
+            sv_info.message["message"] = "password error";
             sv_info.status = Unauthorized;
             return sv_info;
         }
@@ -90,7 +90,7 @@ namespace OJApp
         App.getRedisManager().set(token, info.username);
 
         sv_info.status = OK;
-        sv_info.message = "login success";
+        sv_info.message["message"] = "login success";
         sv_info.message["token"] = std::move(token);
         return sv_info;
     }

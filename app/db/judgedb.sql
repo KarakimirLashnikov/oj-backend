@@ -2,12 +2,13 @@ CREATE DATABASE IF NOT EXISTS judgedb;
 USE judgedb;
 CREATE TABLE users (
     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    user_uuid VARCHAR(36) NOT NULL UNIQUE,
     username VARCHAR(64) NOT NULL UNIQUE,  -- 用户名
-    email VARCHAR(128) NOT NULL UNIQUE,    -- 邮箱
+    email VARCHAR(128) NOT NULL,           -- 邮箱
     password_hash VARCHAR(128) NOT NULL,   -- 密码哈希
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_username (username),
-    INDEX idx_email (email)
+    INDEX idx_user_uuid (user_uuid)
 );
 CREATE TABLE problems (
     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
@@ -36,7 +37,7 @@ CREATE TABLE problem_limits (
 CREATE TABLE test_cases (
     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     problem_id BIGINT UNSIGNED NOT NULL,           -- 关联的题目ID
-    stdin TEXT NOT NULL,                        -- 测试用例输入
+    stdin_data TEXT NOT NULL,                        -- 测试用例输入
     expected_output TEXT NOT NULL,              -- 期望输出
     sequence INT UNSIGNED NOT NULL,
     FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE,
@@ -44,7 +45,7 @@ CREATE TABLE test_cases (
 );
 CREATE TABLE submissions (
     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
-    sub_strid VARCHAR(36) NOT NULL UNIQUE,         -- 评测提交ID
+    sub_uuid VARCHAR(36) NOT NULL UNIQUE,         -- 评测提交ID
     user_id BIGINT UNSIGNED NOT NULL,                 -- 用户ID
     problem_id BIGINT UNSIGNED NOT NULL,              -- 题目ID
     language VARCHAR(16) NOT NULL,                 -- 编程语言

@@ -1,7 +1,6 @@
 #include "api/submissions.hpp"
 #include "api/api.hpp"
 #include "services/SubmissionService.hpp"
-#include "submissions.hpp"
 
 namespace OJApp::Submissions
 {

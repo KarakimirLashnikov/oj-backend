@@ -24,7 +24,7 @@ namespace OJApp
         // 验证消息合法性（检查必填字段）
         inline bool isValid() const
         {
-            return !sql.empty() && !data_key.empty();
+            return op_type != DbOpType::INVALID_OP && !sql.empty() && !data_key.empty();
         }
     };
 
@@ -35,7 +35,7 @@ namespace OJApp
         ~RedisManager() = default;
 
         // 仅允许发布数据库操作消息（强类型约束）
-        void publishDbOperate(const DbOperateMessage &msg);
+        void publishDbOperate(DbOperateMessage msg);
 
         // 提供Redis访问接口（供订阅者从Redis获取数据）
         std::shared_ptr<sw::redis::Redis> getRedis() const { return m_Redis; }

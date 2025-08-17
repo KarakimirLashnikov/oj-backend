@@ -1,7 +1,11 @@
 #include "services/SubmissionService.hpp"
+#include "Application.hpp"
+#include "dbop/DbOpFactory.hpp"
 
 namespace OJApp
 {
+    using DbOp::makeDbOp;
+    using DbOp::OpType;
     ServiceInfo SubmissionService::submit(SubmissionInfo info, const std::string &token)
     {
         ServiceInfo sv_info{};
@@ -29,7 +33,7 @@ namespace OJApp
         return sv_info;
     }
 
-    ServiceInfo querySubmission(const std::string &submission_id, const std::string &token)
+    ServiceInfo SubmissionService::querySubmission(const std::string &submission_id, const std::string &token)
     {
         ServiceInfo sv_info{};
 
@@ -52,7 +56,7 @@ namespace OJApp
             return sv_info;
         }
 
-        auto db_op = DbOp::makeDbOp(OpType::Query
+        auto db_op = makeDbOp(OpType::Query
                             , R"SQL(SELECT overall_status FROM submissions WHERE submission_id = ? LIMIT 1;)SQL"
                             , { submission_id });
         auto result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));

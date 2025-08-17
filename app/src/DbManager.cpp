@@ -30,6 +30,7 @@ namespace OJApp
             else
                 LOG_ERROR("Invalid Db operation, db op is NULL");
         } catch (const Exceptions::ParameterException& e) {
+            m_DBConnPool->returnWorker(worker->workerID());
             LOG_ERROR("Db Manager Exception: {}", e.what());
         } catch (const sql::SQLException &e) {
             if (e.getErrorCode() == 1205 || e.getErrorCode() == 1213)
@@ -40,7 +41,7 @@ namespace OJApp
                 execute(db_op);
             }
         } catch (const std::exception& e) {
-            throw makeSystemException(e.what());
+            LOG_ERROR("Db Manager Exception: {}", e.what());
         }
         
         m_DBConnPool->returnWorker(worker->workerID());

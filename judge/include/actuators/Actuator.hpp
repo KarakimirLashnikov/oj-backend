@@ -17,7 +17,7 @@ namespace Judge
         static void initSystem(Core::Configurator& cfg);
         
         // 核心执行方法
-        ExecutionResult execute(const fs::path& exe_path,
+        virtual ExecutionResult execute(const fs::path& exe_path,
                                 const LimitsInfo& limits,
                                 std::string_view stdin_data);
 
