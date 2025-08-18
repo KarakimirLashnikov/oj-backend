@@ -18,8 +18,8 @@ static std::once_flag ONCE_FLAG{};
 static sock_fprog SHARED_SECCOMP{};
 static bool IS_SYSTEM_INITIALIZED{false};
 static constexpr const char *CGROUP_ROOT{"/sys/fs/cgroup"};
-static constexpr int FATHER_PIPE_INDEX{0};
-static constexpr int CHILD_PIPE_INDEX{1};
+static constexpr int READ_PIPE_INEX{0};
+static constexpr int WRITE_PIPE_INDEX{1};
 
 namespace Judge
 {
@@ -113,9 +113,9 @@ namespace Judge
 
         // 父进程
         // 关闭不需要的端口
-        close(stdin_pipe[FATHER_PIPE_INDEX]);
-        close(stdout_pipe[CHILD_PIPE_INDEX]);
-        close(stderr_pipe[CHILD_PIPE_INDEX]);
+        close(stdin_pipe[READ_PIPE_INEX]);
+        close(stdout_pipe[WRITE_PIPE_INDEX]);
+        close(stderr_pipe[WRITE_PIPE_INDEX]);
 
         // 写入输入数据
         if (!stdin_data.empty())
@@ -129,16 +129,16 @@ namespace Judge
                     // 释放资源，准备退出
                     kill(child_pid, SIGKILL);
                     waitpid(child_pid, nullptr, 0);
-                    close(stdin_pipe[CHILD_PIPE_INDEX]);
-                    close(stdout_pipe[FATHER_PIPE_INDEX]);
-                    close(stderr_pipe[FATHER_PIPE_INDEX]);
+                    close(stdin_pipe[WRITE_PIPE_INDEX]);
+                    close(stdout_pipe[READ_PIPE_INEX]);
+                    close(stderr_pipe[READ_PIPE_INEX]);
                     throw Exceptions::makeSystemException(std::string("Failed to write data to stdin pipe: ") + strerror(errno));
                 }
                 total_written += written;
             }
         }
-        // 写完关闭子进程的写端
-        close(stdin_pipe[CHILD_PIPE_INDEX]);
+        // 写完关闭
+        close(stdin_pipe[WRITE_PIPE_INDEX]);
 
         ExecutionResult result{};
         fs::path cgroup_path{};
@@ -149,7 +149,7 @@ namespace Judge
             LOG_INFO("Cgroup created for PID: {}", child_pid);
             // 监控子进程
             LOG_INFO("Monitoring PID: {}", child_pid);
-            monitorChild(child_pid, stdout_pipe[FATHER_PIPE_INDEX], stderr_pipe[FATHER_PIPE_INDEX], start_at, result, limits, cgroup_path);
+            monitorChild(child_pid, stdout_pipe[READ_PIPE_INEX], stderr_pipe[READ_PIPE_INEX], start_at, result, limits, cgroup_path);
             LOG_INFO("Monitoring finished, PID: {}, rusult: {}, stderr: {}", child_pid, result.test_result.toString(), result.stderr);
             LOG_INFO("        stdout: {}", result.stdout.size() < 128 ? result.stdout : result.stdout.substr(0, 128) + "...");
 
@@ -157,15 +157,15 @@ namespace Judge
         catch (const std::exception &e)
         {
             // 清理资源
-            close(stdout_pipe[FATHER_PIPE_INDEX]);
-            close(stderr_pipe[FATHER_PIPE_INDEX]);
+            close(stdout_pipe[READ_PIPE_INEX]);
+            close(stderr_pipe[READ_PIPE_INEX]);
             cleanupCgroup(cgroup_path);
             LOG_ERROR("unexpected error occured: {}", e.what());
             throw Exceptions::makeSystemException(e.what());
         }
 
-        close(stdout_pipe[FATHER_PIPE_INDEX]);
-        close(stderr_pipe[FATHER_PIPE_INDEX]);
+        close(stdout_pipe[READ_PIPE_INEX]);
+        close(stderr_pipe[READ_PIPE_INEX]);
         cleanupCgroup(cgroup_path);
         LOG_INFO("Cgroup cleaned for PID: {}", child_pid);
         return result;
@@ -194,7 +194,7 @@ namespace Judge
         }
 
         // 设置非阻塞模式
-        if (fcntl(stdout_pipe[FATHER_PIPE_INDEX], F_SETFL, O_NONBLOCK) == -1)
+        if (fcntl(stdout_pipe[READ_PIPE_INEX], F_SETFL, O_NONBLOCK) == -1)
         {
             close(stdin_pipe[0]);
             close(stdin_pipe[1]);
@@ -204,7 +204,7 @@ namespace Judge
             close(stderr_pipe[1]);
             throw Exceptions::makeSystemException("fcntl error: " + std::to_string(errno));
         }
-        if (fcntl(stderr_pipe[FATHER_PIPE_INDEX], F_SETFL, O_NONBLOCK) == -1)
+        if (fcntl(stderr_pipe[READ_PIPE_INEX], F_SETFL, O_NONBLOCK) == -1)
         {
             close(stdin_pipe[0]);
             close(stdin_pipe[1]);
@@ -222,19 +222,19 @@ namespace Judge
                             , const fs::path& exe_path
                             , const LimitsInfo& limits)
     {
-        close(stdin_pipe[CHILD_PIPE_INDEX]);
-        close(stdout_pipe[FATHER_PIPE_INDEX]);
-        close(stderr_pipe[FATHER_PIPE_INDEX]);
+        close(stdin_pipe[WRITE_PIPE_INDEX]);
+        close(stdout_pipe[READ_PIPE_INEX]);
+        close(stderr_pipe[READ_PIPE_INEX]);
         
         // 重定向标准IO
-        dup2(stdin_pipe[FATHER_PIPE_INDEX], STDIN_FILENO);
-        dup2(stdout_pipe[CHILD_PIPE_INDEX], STDOUT_FILENO);
-        dup2(stderr_pipe[CHILD_PIPE_INDEX], STDERR_FILENO);
+        dup2(stdin_pipe[READ_PIPE_INEX], STDIN_FILENO);
+        dup2(stdout_pipe[WRITE_PIPE_INDEX], STDOUT_FILENO);
+        dup2(stderr_pipe[WRITE_PIPE_INDEX], STDERR_FILENO);
         
         // 关闭多余描述符
-        close(stdin_pipe[FATHER_PIPE_INDEX]);
-        close(stdout_pipe[CHILD_PIPE_INDEX]);
-        close(stderr_pipe[CHILD_PIPE_INDEX]);
+        close(stdin_pipe[READ_PIPE_INEX]);
+        close(stdout_pipe[WRITE_PIPE_INDEX]);
+        close(stderr_pipe[WRITE_PIPE_INDEX]);
         
                 // 1. 设置资源限制
         struct rlimit stack_limit{
