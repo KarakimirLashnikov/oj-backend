@@ -132,3 +132,16 @@ std::optional<std::string> OJApp::TokenManager::refreshToken(const std::string &
         return std::nullopt;
     }
 }
+
+std::optional<std::chrono::system_clock::time_point> 
+OJApp::TokenManager::getTokenExpiry(const std::string &token)
+{
+    try {
+        auto decoded{ jwt::decode(token) };
+        auto expClaim{ decoded.get_expires_at() };
+        return expClaim;
+    } catch (const std::exception& e) {
+        LOG_ERROR("get token expiry failed!");
+        return std::nullopt;
+    }
+}

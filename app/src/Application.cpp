@@ -8,9 +8,6 @@
 #include "SystemException.hpp"
 #include "utilities/JudgeResult.hpp"
 #include "Judger.hpp"
-#include "DbManager.hpp"
-#include "RedisManager.hpp"
-#include "services/AuthService.hpp"
 #include "dbop/DbOpFactory.hpp"
 
 namespace OJApp
@@ -25,16 +22,21 @@ namespace OJApp
         std::unique_ptr<RedisManager> m_RedisManager;
         std::unique_ptr<sw::redis::Subscriber> m_DbOpSubscriber;
         std::unique_ptr<AuthService> m_AuthService;
+        std::unique_ptr<ProblemService> m_ProblemService;
+        std::unique_ptr<SubmissionService> m_SubmissionService;
         fs::path m_SubmissionTempDir;
         std::atomic<bool> m_ShouldExit{ false };
 
         Impl() = default;
 
         Impl(std::string_view conf_file_path)
-        : m_JudgerPool{ nullptr }
+        : m_JudgerPool{}
         , m_DbManager{}
         , m_RedisManager{}
         , m_DbOpSubscriber{}
+        , m_AuthService{}
+        , m_ProblemService{}
+        , m_SubmissionService{}
         , m_SubmissionTempDir{}
         , m_Configurator{ std::make_unique<Core::Configurator>(conf_file_path.data()) }
         {
@@ -57,6 +59,12 @@ namespace OJApp
 
             m_AuthService = std::make_unique<AuthService>(*m_Configurator);
             LOG_INFO("auth service create OK");
+
+            m_ProblemService = std::make_unique<ProblemService>(*m_Configurator);
+            LOG_INFO("problem service create OK");
+
+            m_SubmissionService = std::make_unique<SubmissionService>(*m_Configurator);
+            LOG_INFO("submission service create OK");
 
             m_DbOpSubscriber = std::make_unique<sw::redis::Subscriber>(m_RedisManager->getRedis()->subscriber());
             m_DbOpSubscriber->on_message([this](const std::string& channel, const std::string& msg) {
@@ -133,6 +141,14 @@ namespace OJApp
 
     AuthService& Application::getAuthService() {
         return *(m_ImplPtr->m_AuthService);
+    }
+
+    ProblemService& Application::getProblemService() {
+        return *(m_ImplPtr->m_ProblemService);
+    }
+
+    SubmissionService& Application::getSubmissionService() {
+        return *(m_ImplPtr->m_SubmissionService);
     }
 
     using DbOp::makeDbOp;

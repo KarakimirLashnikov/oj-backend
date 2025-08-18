@@ -10,7 +10,7 @@ namespace OJApp
     public:
         IAuthRequired(Core::Configurator &cfg);
 
-        ~IAuthRequired() = default;
+        virtual ~IAuthRequired() = default;
 
     protected:
         std::optional<UserInfo> authenticate(const std::string &token);

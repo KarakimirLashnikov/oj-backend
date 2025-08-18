@@ -1,6 +1,7 @@
 #include "api/problems.hpp"
 #include "api/api.hpp"
 #include "services/ProblemService.hpp"
+#include "Application.hpp"
 
 namespace OJApp::Problems
 {
@@ -18,8 +19,7 @@ namespace OJApp::Problems
                 
                 const std::string token{ request.at("token").get<std::string>() };
 
-                ProblemService service;
-                ServiceInfo sv_info = service.createProblem(std::move(info), token);
+                ServiceInfo sv_info = App.getProblemService().createProblem(std::move(info), token);
                 
                 res.status = sv_info.status;
                 njson response = njson{ { "message", sv_info.message } };
@@ -37,8 +37,7 @@ namespace OJApp::Problems
                 
                 const std::string token{ request.at("token").get<std::string>() };
 
-                ProblemService service;
-                ServiceInfo sv_info = service.addProblemLimit(std::move(info), token);
+                ServiceInfo sv_info = App.getProblemService().addProblemLimit(std::move(info), token);
                 
                 res.status = sv_info.status;
                 njson response = njson{ { "message", sv_info.message } };
@@ -56,8 +55,7 @@ namespace OJApp::Problems
 
                 const std::string token{ request.at("token").get<std::string>() };
 
-                ProblemService service;
-                ServiceInfo sv_info = service.uploadTestCases(std::move(info), token);
+                ServiceInfo sv_info = App.getProblemService().uploadTestCases(std::move(info), token);
 
                 res.status = sv_info.status;
                 njson response = njson{ {"message", sv_info.message} };
@@ -72,8 +70,7 @@ namespace OJApp::Problems
             [&](httplib::Response& res, njson request) -> void {
                 const std::string token{ request.at("token").get<std::string>() };
 
-                ProblemService service;
-                ServiceInfo sv_info = service.getProblemList(token);
+                ServiceInfo sv_info = App.getProblemService().getProblemList(token);
 
                 res.status = sv_info.status;
                 njson response = njson{ {"message", sv_info.message} };

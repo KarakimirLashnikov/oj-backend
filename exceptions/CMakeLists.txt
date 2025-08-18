@@ -6,6 +6,7 @@ file(
 
 add_library(
     ExceptionsLayer
+    SHARED 
 )
 
 target_sources(

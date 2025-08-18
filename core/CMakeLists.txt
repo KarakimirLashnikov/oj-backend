@@ -6,7 +6,7 @@ file(GLOB
 
 add_library(
     CoreLayer 
-    STATIC 
+    SHARED  
     ${core_sources}
 )
 

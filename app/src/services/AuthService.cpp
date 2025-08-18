@@ -10,11 +10,9 @@ namespace OJApp
 {
     using Exceptions::SystemException;
     
-
     AuthService::AuthService(Core::Configurator &cfg)
+    : IAuthRequired{ cfg }
     {
-        m_ExpireSec = std::chrono::seconds{cfg.get<int>("application", "JWT_EXPIRE", 1)};        
-        m_SecretKey = cfg.get<std::string>("application", "SECRET_KEY", "");
     }
 
 
@@ -45,7 +43,7 @@ namespace OJApp
             .param_array = {data["user_uuid"], data["username"], data["password_hash"], data["email"]}
         };
         // 缓存到redis并发布
-        App.getRedisManager().set(info.username, data.dump());
+        App.getRedisManager().set(info.username, info.toJsonString(), std::chrono::seconds{900});
         App.getRedisManager().publishDbOperate(msg);
 
         sv_info.message["message"] = "registration success";
@@ -61,15 +59,16 @@ namespace OJApp
         if (!queryUserNameExist(info.username)) {
             LOG_INFO("user does not exist");
             sv_info.message["message"] = "username does not exist, please register firstly";
-            sv_info.status = NotFound;
+            sv_info.status = Unauthorized;
             return sv_info;
         }
+
         std::string password = info.password_hash;
         auto data_str = App.getRedisManager().get(info.username);
-        if (!data_str.has_value()) {
-            auto db_op = makeDbOp(DbOp::OpType::Query, R"SQL(SELECT password_hash FROM users WHERE username = ?)SQL", {info.username.data()});
-            njson result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));
-            info.password_hash = result.front().at("password_hash").get<std::string>();
+        if (!data_str) {
+            auto db_op = makeDbOp(DbOp::OpType::Query, R"SQL(SELECT * FROM users WHERE username = ? LIMIT 1)SQL", {info.username.data()});
+            njson result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get())).front();
+            info.fromJson(result);
         } else {
             info.fromJson(njson::parse(data_str.value()));
         }
@@ -81,13 +80,11 @@ namespace OJApp
             return sv_info;
         }
 
-        std::string token = generateUserToken(info.user_uuid).value_or("");
+        std::string token{ m_TokenManager->generateToken(info).value_or(std::string{}) };
         if (token.empty()) {
             LOG_INFO("generateUserToken failed");
             throw SystemException{ InternalServerError, "generateToken error" };
         }
-
-        App.getRedisManager().set(token, info.username);
 
         sv_info.status = OK;
         sv_info.message["message"] = "login success";
@@ -98,39 +95,18 @@ namespace OJApp
     bool AuthService::queryUserNameExist(std::string_view name)
     {
         LOG_INFO("search user with username: {}", name);
-
+        if (App.getRedisManager().exists(name.data())) {
+            LOG_INFO("username already exists");
+            return false;
+        }
         auto db_op = DbOp::makeDbOp(DbOp::OpType::Query , R"SQL(SELECT * FROM users WHERE username = ?)SQL", {name.data()});
         auto result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));
-
         if (!result.empty()){
-            LOG_INFO("query username {} return exist result", name);
+            LOG_INFO("username already exists");
             return true;
         }
-        LOG_INFO("queryUserInfoByName return null result");
+        LOG_INFO("username doesn't exist");
         return false;
-    }
-
-    std::optional<std::string> AuthService::generateUserToken(std::string_view user_uuid)
-    {
-        try
-        {
-            // 创建JWT构建器
-            auto token_builder = jwt::create()
-                                     .set_issuer("oj-system")                                            // 签发者（可选）
-                                     .set_subject("user-auth")                                           // 主题（可选）
-                                     .set_payload_claim("username", jwt::claim(std::string(user_uuid)))  // 用户作为载荷（payload）
-                                     .set_issued_at(std::chrono::system_clock::now())                    // 签发时间
-                                     .set_expires_at(std::chrono::system_clock::now() + m_ExpireSec);    // 过期时间
-            // 使用HS256算法和密钥签名
-            std::string token{token_builder.sign(jwt::algorithm::hs256{m_SecretKey})};
-            return token;
-        }
-        catch (const std::exception &e)
-        {
-            // 捕获签名过程中的异常（如密钥为空、算法不支持等）
-            LOG_ERROR("Failed to generate JWT: {}", e.what());
-            return std::nullopt;
-        }
     }
 
     std::optional<std::string> AuthService::hashPassword(std::string_view pwd)

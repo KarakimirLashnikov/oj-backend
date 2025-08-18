@@ -63,5 +63,5 @@ include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-add_library(kafel_static STATIC ${SRCS})
-set_target_properties(kafel_static PROPERTIES OUTPUT_NAME kafel)
+add_library(kafel_shared SHARED ${SRCS})
+set_target_properties(kafel_shared PROPERTIES OUTPUT_NAME kafel)

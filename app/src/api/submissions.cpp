@@ -1,6 +1,7 @@
 #include "api/submissions.hpp"
 #include "api/api.hpp"
 #include "services/SubmissionService.hpp"
+#include "Application.hpp"
 
 namespace OJApp::Submissions
 {
@@ -19,8 +20,7 @@ namespace OJApp::Submissions
 
                 const std::string token{ request.at("token").get<std::string>() };
 
-                SubmissionService service;
-                ServiceInfo sv_info = service.submit(std::move(info), token);
+                ServiceInfo sv_info = App.getSubmissionService().submit(std::move(info), token);
 
                 res.status = sv_info.status;
                 njson response = njson{ {"message", sv_info.message} };
@@ -36,8 +36,7 @@ namespace OJApp::Submissions
                 const std::string token{ request.at("token").get<std::string>() };
                 const std::string submission_id{ request.at("submission_id").get<std::string>() };
 
-                SubmissionService service;
-                ServiceInfo sv_info = service.querySubmission(submission_id, token);
+                ServiceInfo sv_info = App.getSubmissionService().querySubmission(submission_id, token);
 
                 res.status = sv_info.status;
                 njson response = njson{ {"message", sv_info.message} };

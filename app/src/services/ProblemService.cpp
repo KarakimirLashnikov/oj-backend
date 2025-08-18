@@ -7,40 +7,45 @@ namespace OJApp
     using DbOp::makeDbOp;
     using DbOp::OpType;
 
+    ProblemService::ProblemService(Core::Configurator& cfg)
+    : IAuthRequired{ cfg }
+    , m_ProblemPrefix{ cfg.get<std::string>("application", "PROBLEM_PREFIX", "problem:")}
+    , m_LimitPrefix{ cfg.get<std::string>("application", "LIMIT_PREFIX", "limit:")}
+    , m_TestCasePrefix{ cfg.get<std::string>("application", "TESTCASE_PREFIX", "testcase:")}
+    {
+    }
+
     using Core::Types::difficultyToString;
     ServiceInfo ProblemService::createProblem(ProblemInfo info, const std::string& token)
     {
         ServiceInfo sv_info{};
         
-        if (!App.getRedisManager().exists(token)) {
-            sv_info.message["message"] = "Authentication failed, please login again";
-            sv_info.status = Unauthorized;
+        if (!this->authenticate(token)) {
+            sv_info = this->createAuthFailedResp();
             return sv_info;
         }
 
-        if (!App.getRedisManager().expire(token)) {
-            sv_info.message["message"] = "Authentication  extend failed in [createProblem]";
-            sv_info.status = InternalServerError;
-            return sv_info;
-        }
-
-        auto db_op = makeDbOp(OpType::Query, R"SQL(SELECT * FROM problems p WHERE p.title = ?;)SQL", { info.title });
-        njson::array_t result = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));
-        if (!result.empty()) {
+        auto db_op = makeDbOp(OpType::Query, R"SQL(SELECT * FROM problems p WHERE p.title = ? LIMIT 1;)SQL", { info.title });
+        njson tmp = App.getDbManager().query(dynamic_cast<DbOp::DbQueryOp *>(db_op.get()));
+        if (!tmp.empty()) {
             sv_info.status = Conflict;
             sv_info.message["message"] = "Problems's title is used.";
             return sv_info;
         }
 
-        std::string username{ App.getRedisManager().get(token).value() };
-        DbOperateMessage msg{
-            .op_type = OpType::Insert,
-            .sql = R"SQL(INSERT INTO problems (title,difficulty,description,author_id) 
-VALUES (?, ?, ?, (SELECT id FROM users WHERE username = ? LIMIT 1));)SQL",
-            .data_key = info.title,
-            .param_array = { info.title, difficultyToString(info.difficulty), info.description, username }
-        };
-        App.getRedisManager().publishDbOperate(msg);
+        std::string data_key{ m_ProblemPrefix + info.title };
+        tmp = { info.title, difficultyToString(info.difficulty), info.description, info.username };
+
+        App.getRedisManager().set(data_key, tmp.dump());
+        App.getRedisManager().publishDbOperate(DbOperateMessage{
+                .op_type = OpType::Insert,
+                .sql = R"SQL(INSERT INTO problems (title,difficulty,description,author_id) 
+VALUES (?, ?, ?, (SELECT id FROM users WHERE username = ? LIMIT 1))
+ON DUPLICATE KEY UPDATE;)SQL",
+                .data_key = std::move(data_key),
+                .param_array = std::move(tmp)
+            }
+        );
 
         sv_info.status = Created;
         sv_info.message["message"] = "Create problems successfully";
@@ -51,33 +56,38 @@ VALUES (?, ?, ?, (SELECT id FROM users WHERE username = ? LIMIT 1));)SQL",
     {
         ServiceInfo sv_info{};
 
-        if (!App.getRedisManager().exists(token)) {
-            sv_info.message["message"] = "Authentication failed, please login again";
-            sv_info.status = Unauthorized;
+        if (!this->authenticate(token)) {
+            sv_info = this->createAuthFailedResp();
             return sv_info;
         }
 
-        if (!App.getRedisManager().expire(token)) {
-            sv_info.message["message"] = "Authentication  extend failed in [createProblem]";
-            sv_info.status = InternalServerError;
-            return sv_info;
-        }
-
-        DbOperateMessage msg{
-            .op_type = OpType::Insert,
-            .sql = R"SQL(INSERT INTO problem_limits (problem_id,language,time_limit_ms,extra_time_ms,wall_time_ms,memory_limit_kb,stack_limit_kb)
-VALUES ((SELECT id FROM problems WHERE title = ? LIMIT 1),?,?,?,?,?,?);)SQL",
-            .data_key = info.problem_title,
-            .param_array = {info.problem_title
-                            , LanguageIdtoString(info.language_id)
-                            , static_cast<uint32_t>(info.time_limit_s * 1000)
-                            , static_cast<uint32_t>(info.extra_time_s * 1000)
-                            , static_cast<uint32_t>(info.wall_time_s * 1000)
-                            , info.memory_limit_kb
-                            , info.stack_limit_kb}
+        std::string data_key{ m_LimitPrefix + info.problem_title };
+        njson tmp = {info.problem_title
+            , LanguageIdtoString(info.language_id)
+            , static_cast<uint32_t>(info.time_limit_s * 1000)
+            , static_cast<uint32_t>(info.extra_time_s * 1000)
+            , static_cast<uint32_t>(info.wall_time_s * 1000)
+            , info.memory_limit_kb
+            , info.stack_limit_kb
         };
 
-        App.getRedisManager().publishDbOperate(msg);
+        App.getRedisManager().set(data_key, tmp.dump());
+
+        App.getRedisManager().publishDbOperate(DbOperateMessage{
+                .op_type = OpType::Insert,
+                .sql = R"SQL(
+INSERT INTO problem_limits (problem_id,language,time_limit_ms,extra_time_ms,wall_time_ms,memory_limit_kb,stack_limit_kb)
+VALUES ((SELECT id FROM problems WHERE title = ? LIMIT 1),?,?,?,?,?,?)
+ON DUPLICATE KEY UPDATE
+    time_limit_ms = VALUES(time_limit_ms),
+    extra_time_ms = VALUES(extra_time_ms),
+    wall_time_ms = VALUES(wall_time_ms),
+    memory_limit_kb = VALUES(memory_limit_kb),
+    stack_limit_kb = VALUES(stack_limit_kb);)SQL",
+                .data_key = std::move(data_key),
+                .param_array = std::move(tmp)
+            }
+        );
 
         sv_info.status = Created;
         sv_info.message["message"] = "Create problem limits successfully";
@@ -88,22 +98,19 @@ VALUES ((SELECT id FROM problems WHERE title = ? LIMIT 1),?,?,?,?,?,?);)SQL",
     {
         ServiceInfo sv_info{};
 
-        if (!App.getRedisManager().exists(token)) {
-            sv_info.message["message"] = "Authentication failed, please login again";
-            sv_info.status = Unauthorized;
-            return sv_info;
-        }
-
-        if (!App.getRedisManager().expire(token)) {
-            sv_info.message["message"] = "Authentication  extend failed in [uploadTestCases]";
-            sv_info.status = InternalServerError;
+        if (!this->authenticate(token)) {
+            sv_info = this->createAuthFailedResp();
             return sv_info;
         }
 
         DbOperateMessage msg{
             .op_type = OpType::Insert,
-            .sql = R"SQL(INSERT INTO test_cases (problem_id,stdin_data,expected_output,sequence)
-VALUES ((SELECT id FROM problems WHERE title = ? LIMIT 1),?,?,?);)SQL",
+            .sql = R"SQL(
+INSERT INTO test_cases (problem_id,stdin_data,expected_output,sequence)
+VALUES ((SELECT id FROM problems WHERE title = ? LIMIT 1),?,?,?)
+ON DUPLICATE KEY UPDATE
+    stdin_data = VALUES(stdin_data)
+    expected_output = VALUES(expected_output);)SQL",
             .data_key = info.problem_title + std::to_string(info.sequence),
             .param_array = {info.problem_title, info.stdin_data, info.expected_output, info.sequence}
         };

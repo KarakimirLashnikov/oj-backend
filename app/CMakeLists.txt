@@ -1,5 +1,6 @@
 add_library(
     AppLayer
+    SHARED 
 )
 
 find_package(PkgConfig REQUIRED)
@@ -34,5 +35,11 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../exceptions/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/json/include
 )
-
-target_link_libraries(AppLayer PRIVATE ${SODIUM_LIBRARIES})
+find_package(redis++ REQUIRED CONFIG)
+target_link_libraries(
+    AppLayer 
+    PRIVATE 
+    ${SODIUM_LIBRARIES}
+    hiredis
+    redis++::redis++
+)

@@ -24,7 +24,9 @@ else()
 endif()
 
 add_library(
-    JudgeLayer STATIC ${core_sources}
+    JudgeLayer 
+    SHARED 
+    ${core_sources}
 )
 
 target_link_libraries(

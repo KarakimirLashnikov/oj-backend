@@ -4,28 +4,30 @@
 
 namespace OJApp
 {
+
+    SubmissionService::SubmissionService(Core::Configurator& cfg)
+    : IAuthRequired{ cfg }
+    , m_SubPrefix{ cfg.get<std::string>("application", "SUBMISSION_PREFIX", "submission:")}
+    {}
+
+
     using DbOp::makeDbOp;
     using DbOp::OpType;
     ServiceInfo SubmissionService::submit(SubmissionInfo info, const std::string &token)
     {
         ServiceInfo sv_info{};
         
-        if (!App.getRedisManager().exists(token)) {
-            sv_info.message["message"] = "Authentication failed, please login again";
-            sv_info.status = Unauthorized;
-            return sv_info;
-        }
-
-        if (!App.getRedisManager().expire(token)) {
-            sv_info.message["message"] = "Authentication  extend failed in [submit]";
-            sv_info.status = InternalServerError;
+        if (!this->authenticate(token)) {
+            sv_info = this->createAuthFailedResp();
             return sv_info;
         }
 
         info.submission_id = boost::uuids::to_string(boost::uuids::random_generator()());
         sv_info.message["submission_id"] = info.submission_id;
 
-        App.getRedisManager().set("submission_tmp_" + info.submission_id, "PENDING") ;
+        std::string data_key{ m_SubPrefix + info.submission_id };
+
+        App.getRedisManager().set(data_key, info.toJson().dump()) ;
         App.processJudgeTask(std::move(info));
 
         sv_info.status = Created;
@@ -37,22 +39,15 @@ namespace OJApp
     {
         ServiceInfo sv_info{};
 
-        if (!App.getRedisManager().exists(token)) {
-            sv_info.message["message"] = "Authentication failed, please login again";
-            sv_info.status = Unauthorized;
+        if (!this->authenticate(token)) {
+            sv_info = this->createAuthFailedResp();
             return sv_info;
         }
 
-        if (!App.getRedisManager().expire(token)) {
-            sv_info.message["message"] = "Authentication  extend failed in [querySubmission]";
-            sv_info.status = InternalServerError;
-            return sv_info;
-        }
-
-        if (App.getRedisManager().exists("submission_tmp_" + submission_id)) {
+        if (App.getRedisManager().exists(m_SubPrefix + submission_id)) {
             sv_info.status = OK;
             sv_info.message["message"] = "query succeed";
-            sv_info.message["submission_status"] = App.getRedisManager().get("submission_tmp_" + submission_id);
+            sv_info.message["submission_status"] = App.getRedisManager().get(m_SubPrefix + submission_id);
             return sv_info;
         }
 

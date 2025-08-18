@@ -59,9 +59,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/exceptions/include
     ${CMAKE_CURRENT_SOURCE_DIR}/database/include
 )
-
-
-
+find_package(redis++ REQUIRED CONFIG)
 target_link_libraries(
     oj-backend 
     PRIVATE
@@ -71,4 +69,5 @@ target_link_libraries(
     JudgeLayer
     AppLayer
     ExceptionsLayer
+    redis++::redis++
 )

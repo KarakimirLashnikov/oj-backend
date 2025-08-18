@@ -30,6 +30,7 @@ file(
 
 add_library( 
     DatabaseLayer
+    SHARED 
 )
 
 target_sources(
@@ -52,5 +53,5 @@ target_link_libraries(
     PRIVATE  
     mysqlcppconn
     hiredis
-    redis++::redis++_static
+    redis++::redis++
 )

@@ -15,10 +15,10 @@ namespace Core::Types
 
     void UserInfo::fromJson(const njson& json)
     {
-        this->user_uuid = json.contains("user_uuid") ? json.at("user_uuid").get<std::string>() : "";
+        this->user_uuid = json.at("user_uuid").get<std::string>();
         this->username = json.at("username").get<std::string>();
         this->password_hash = json.at("password_hash").get<std::string>();
-        this->email = json.contains("email") ? json.at("email").get<std::string>() : "";
+        this->email = json.at("email").get<std::string>();
     }
 
 

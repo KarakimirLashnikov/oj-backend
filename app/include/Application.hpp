@@ -7,6 +7,8 @@
 #include "RedisManager.hpp"
 #include "DbManager.hpp"
 #include "services/AuthService.hpp"
+#include "services/ProblemService.hpp"
+#include "services/SubmissionService.hpp"
 
 namespace OJApp
 {
@@ -38,6 +40,8 @@ namespace OJApp
         DbManager& getDbManager();
         RedisManager& getRedisManager();
         AuthService& getAuthService();
+        ProblemService& getProblemService();
+        SubmissionService& getSubmissionService();
 
         void processDbOperateEvent(std::string channel, std::string msg);
 
