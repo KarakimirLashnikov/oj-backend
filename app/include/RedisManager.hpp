@@ -42,6 +42,10 @@ namespace OJApp
 
         bool set(const std::string &key, const std::string &value);
 
+        bool set(const std::string &key, const std::string &value, const std::chrono::seconds &ttl);
+
+        bool del(const std::string &key);
+
         bool exists(const std::string& key);
 
         bool expire(const std::string& key);

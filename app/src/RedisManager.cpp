@@ -82,16 +82,36 @@ namespace OJApp
 
     bool RedisManager::set(const std::string& key, const std::string& value)
     {
+        return set(key, value, m_KeyTTL);
+    }
+
+    bool RedisManager::set(const std::string& key, const std::string& value, const std::chrono::seconds &ttl)
+    {
         try {
-            if (m_Redis->set(key, value, m_KeyTTL)) {
-                LOG_INFO("Set data OK");
+            if (m_Redis->set(key, value, ttl)) {
+                LOG_INFO("Set data with ttl ok");
                 return true;
             }
-            LOG_ERROR("Set failed");
+            LOG_INFO("Set failed");
             return false;
         } catch (const sw::redis::Error& e) {
-            LOG_ERROR("Redis Set error: {}", e.what());
+            LOG_ERROR("Set failed: {}", e.what());
             throw makeSystemException("Redis set error");
+        }
+    }
+
+    bool RedisManager::del(const std::string& key)
+    {
+        try {
+            if (m_Redis->del(key) > 0) {
+                LOG_INFO("Delete key success");
+                return true;
+            }
+            LOG_INFO("Del failed");
+            return false;
+        } catch (const sw::redis::Error& e) {
+            LOG_ERROR("Del failed: {}", e.what());
+            throw makeSystemException("Redis del error");
         }
     }
 
